@@ -1,7 +1,7 @@
 # λ◦ (Lambda-Circle) Implementation Plan
 
-**Version**: 1.2  
-**Date**: 2026-03-27  
+**Version**: 1.3  
+**Date**: 2026-03-29  
 **Language**: Rust (implementation), Lean4 (formal proofs)  
 **Scope**: Full v1.0 language  
 **Timeline**: Research/Prototype
@@ -685,6 +685,12 @@ cargo fmt
 - Added end-to-end pipeline: run_sequential(), run_parallel()
 - Fixed clippy warnings (clone_on_copy, get_first, unnecessary_unwrap)
 - Removed unused name_counter field from NetBuilder
+- Fixed Lambda (λ) UTF-8 handling in lexer (use char, not byte positions)
+- Fixed Unit parsing (handle KwUnit token in grammar)
+- Fixed evaluation loop to run at least one step
+- Fixed beta reduction (proper wire disconnection/reconnection)
+- Fixed variable translation (2-port constructors for value flow)
+- Fixed extract_result to iterate in reverse (literals first)
 
 **Phase 3: Trait System + Modules**
 **Step 3.1**: Global Registry (Implementation, Registry structs)
@@ -692,6 +698,16 @@ cargo fmt
 **Step 3.3**: Trait Resolution (DAG-DFS algorithm)
 **Step 3.4**: Module loader and export format
 **Step 3.5**: Linker with coherence + S5' verification
+
+### Test Coverage
+
+| Suite | Tests | Status |
+|-------|-------|--------|
+| Unit tests | 2 | ✅ PASS |
+| Parser tests | 9 | ✅ PASS |
+| Quickcheck tests | 35 | ✅ PASS |
+| Semiring tests | 6 | ✅ PASS |
+| **Total** | **52** | **✅ PASS** |
 
 ### What's Next
 
