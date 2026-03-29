@@ -706,6 +706,114 @@ cargo fmt
 **Step 4.3**: DOT Export - GraphViz net visualization
 **Step 4.4**: Benchmarking - Performance testing infrastructure
 
+### Phase 5: Module System ⏳ IN PROGRESS
+
+**Goal**: Implement full module system per §11 of design document v2.4
+
+#### Current State (Already Implemented)
+
+| Component | Status |
+|-----------|--------|
+| Module struct | ✅ Done |
+| Basic loader | ✅ Done |
+| Exports struct | ✅ Done |
+| Linker skeleton | ✅ Done |
+| Coherence checker | ✅ Done |
+| Trait registry | ✅ Done |
+| Simple `.λo` format | ⚠️ Partial |
+
+#### What's Missing
+
+| Feature | Priority |
+|---------|----------|
+| File-to-module mapping | HIGH |
+| Visibility (`pub`) | HIGH |
+| Import forms (`use`) | HIGH |
+| Orphan rule enforcement | HIGH |
+| Module DAG (cycle detection) | HIGH |
+| Full `.λo` format | MEDIUM |
+| Incremental recompilation | MEDIUM |
+| CLI build commands | HIGH |
+
+#### Implementation Steps
+
+**Step 5.1**: Parser Extensions for Module Syntax
+- Add `pub`, `use`, `trait`, `impl`, `no_prelude` tokens
+- Add module-level declaration parsing
+
+**Step 5.2**: Visibility & Export System
+- Add visibility field to declarations
+- Implement opaque (`pub type T`) vs transparent (`pub type T(..)`) exports
+
+**Step 5.3**: Import Resolution
+- Build import DAG from `use` statements
+- Detect cycles → `CycleDetected` error
+
+**Step 5.4**: Orphan Rule Enforcement
+- Track defining module for each type and trait
+- Verify impl in correct module at Gate 3
+
+**Step 5.5**: Full `.λo` Format
+- Type section, Trait section, Net section, Export table, Debug section
+- MessagePack serialization
+
+**Step 5.6**: Incremental Recompilation
+- Export table hashing
+- Compare hashes before downstream recompilation
+
+**Step 5.7**: CLI Commands
+- `build` command - Compile to .λo
+- `link` command - Link to executable
+
+#### Files to Create
+
+```
+src/core/name_resolver.rs     # Import resolution + DAG building
+src/modules/serializer.rs     # Full .λo serialization
+src/build/mod.rs              # Build system + incremental
+```
+
+#### Files to Modify
+
+```
+src/core/parser/lexer.rs      # Add module keywords
+src/core/parser/grammar.rs    # Add declaration parsing
+src/modules/export.rs         # Visibility
+src/modules/linker.rs        # Full deserialization
+src/traits/coherence.rs      # Orphan rule
+src/main.rs                  # Add build/link commands
+```
+
+### Phase 6: Standard Library ⏳ PENDING
+
+**Goal**: Implement stdlib per §16 of design document v2.4
+
+#### Stdlib Structure
+
+```
+Std/
+├── Prelude     -- auto-imported (Bool, Unit, Option, Result, Eq, Ord, Hash, Clone, Drop, Add, Sub, Mul, Div, Neg)
+├── String     -- Linear string type [Layer 1]
+├── Show       -- Show trait [Layer 1]
+├── List       -- Singly-linked list [Layer 2]
+├── Map        -- Persistent map [Layer 2]
+└── IO         -- Capability-based IO [Layer 3]
+```
+
+#### Implementation Steps
+
+**Step 6.1**: Implement Prelude traits (Eq, Ord, Hash, Clone, Drop, Add, Sub, Mul, Div, Neg)
+
+**Step 6.2**: Implement Std.String
+
+**Step 6.3**: Implement Std.List
+
+**Step 6.4**: Implement Std.Map
+
+**Step 6.5**: Implement Std.Show
+
+**Step 6.6**: Implement Std.IO
+
 ### Test Coverage
 
 | Suite | Tests | Status |
@@ -718,11 +826,13 @@ cargo fmt
 
 ### What's Next
 
+- Phase 5: Module System (8 weeks estimated)
+- Phase 6: Standard Library (8 weeks estimated)
 - Version 1.0 Release
 
 ---
 
-*Plan Version: 1.6*  
+*Plan Version: 1.7*  
 *Created: 2026-03-27*  
 *Updated: 2026-03-29*  
-*Status: Phase 4 COMPLETE ✅ — Version 1.0 ready*
+*Status: Phase 5 IN PROGRESS*
