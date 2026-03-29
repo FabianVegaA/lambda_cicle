@@ -256,6 +256,102 @@ impl From<Term> for Type {
     }
 }
 
+pub fn check_strict_positivity(ty: &Type) -> Result<(), TypeError> {
+    match ty {
+        Type::Inductive(name, params) => {
+            if let Some(first_param) = params.first() {
+                check_positive_occurrence(first_param, &name.0)?;
+            }
+            Ok(())
+        }
+        Type::Arrow(_, arg, ret) => {
+            check_strict_positivity(arg)?;
+            check_strict_positivity(ret)?;
+            Ok(())
+        }
+        Type::Forall(_, ty) => check_strict_positivity(ty),
+        Type::TraitConstraint(_, ty) => check_strict_positivity(ty),
+        Type::Borrow(ty) => check_strict_positivity(ty),
+        Type::Product(left, right) => {
+            check_strict_positivity(left)?;
+            check_strict_positivity(right)?;
+            Ok(())
+        }
+        Type::Sum(left, right) => {
+            check_strict_positivity(left)?;
+            check_strict_positivity(right)?;
+            Ok(())
+        }
+        Type::Native(_) => Ok(()),
+    }
+}
+
+fn check_positive_occurrence(ty: &Type, type_param: &str) -> Result<(), TypeError> {
+    match ty {
+        Type::Arrow(_, arg, ret) => {
+            check_negative_occurrence(arg, type_param)?;
+            check_positive_occurrence(ret, type_param)?;
+            Ok(())
+        }
+        Type::Forall(_, ty) => check_positive_occurrence(ty, type_param),
+        Type::TraitConstraint(_, ty) => check_positive_occurrence(ty, type_param),
+        Type::Borrow(ty) => check_positive_occurrence(ty, type_param),
+        Type::Product(left, right) => {
+            check_positive_occurrence(left, type_param)?;
+            check_positive_occurrence(right, type_param)
+        }
+        Type::Sum(left, right) => {
+            check_positive_occurrence(left, type_param)?;
+            check_positive_occurrence(right, type_param)
+        }
+        Type::Inductive(name, params) => {
+            for param in params {
+                if let Type::Inductive(n, _) = param {
+                    if n.0 == type_param {
+                        return Err(TypeError::StrictPositivityViolation(name.clone()));
+                    }
+                }
+                check_positive_occurrence(param, type_param)?;
+            }
+            Ok(())
+        }
+        Type::Native(_) => Ok(()),
+    }
+}
+
+fn check_negative_occurrence(ty: &Type, type_param: &str) -> Result<(), TypeError> {
+    match ty {
+        Type::Arrow(_, arg, ret) => {
+            check_negative_occurrence(arg, type_param)?;
+            check_negative_occurrence(ret, type_param)?;
+            Ok(())
+        }
+        Type::Forall(_, ty) => check_negative_occurrence(ty, type_param),
+        Type::TraitConstraint(_, ty) => check_negative_occurrence(ty, type_param),
+        Type::Borrow(ty) => check_negative_occurrence(ty, type_param),
+        Type::Product(left, right) => {
+            check_negative_occurrence(left, type_param)?;
+            check_negative_occurrence(right, type_param)
+        }
+        Type::Sum(left, right) => {
+            check_negative_occurrence(left, type_param)?;
+            check_negative_occurrence(right, type_param)
+        }
+        Type::Inductive(name, params) => {
+            for param in params {
+                if let Type::Inductive(n, _) = param {
+                    if n.0 == type_param {
+                        return Err(TypeError::StrictPositivityViolation(name.clone()));
+                    }
+                }
+                check_negative_occurrence(param, type_param)?;
+            }
+            Ok(())
+        }
+        Type::Native(_) => Ok(()),
+    }
+}
+
 pub fn type_check_with_borrow_check(term: &Term) -> Result<Type, TypeError> {
     let ctx = TypeContext::new();
     let (ty, _) = type_check(term, &ctx)?;
