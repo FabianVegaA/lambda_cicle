@@ -91,7 +91,11 @@ impl Context {
                     Quantity::One => Multiplicity::One,
                     Quantity::Omega => Multiplicity::Omega,
                 },
-                Multiplicity::Omega => Multiplicity::Omega,
+                Multiplicity::Omega => match q {
+                    Quantity::Zero => Multiplicity::Zero,
+                    Quantity::One => Multiplicity::Omega,
+                    Quantity::Omega => Multiplicity::Omega,
+                },
             };
             result.insert(var.clone(), (new_mult, ty.clone()));
         }
