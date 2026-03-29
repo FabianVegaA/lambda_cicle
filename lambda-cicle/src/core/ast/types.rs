@@ -1,6 +1,7 @@
+use serde::{Deserialize, Serialize};
 use std::fmt;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum NativeKind {
     Int,
     Float,
@@ -21,7 +22,7 @@ impl fmt::Display for NativeKind {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Multiplicity {
     Zero,
     One,
@@ -63,7 +64,7 @@ impl fmt::Display for Multiplicity {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct TraitName(pub String);
 
 impl TraitName {
@@ -78,7 +79,7 @@ impl fmt::Display for TraitName {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct TypeName(pub String);
 
 impl TypeName {
@@ -93,7 +94,7 @@ impl fmt::Display for TypeName {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct MethodName(pub String);
 
 impl MethodName {
@@ -108,7 +109,7 @@ impl fmt::Display for MethodName {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Type {
     Native(NativeKind),
     Arrow(Multiplicity, Box<Type>, Box<Type>),

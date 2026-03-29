@@ -77,6 +77,8 @@ pub fn type_check(term: &Term, ctx: &TypeContext) -> Result<(Type, TypeContext),
                 }
             };
 
+            // Lean4 spec: HasType (Context.scale q Γ₁) e₁ τ₁
+            // Scale the outer context by q for checking the value
             let scaled_ctx = ctx.scale(q).map_err(|_e| TypeError::BorrowContextMix)?;
             let (val_ty, ctx1) = type_check(value, &scaled_ctx)?;
 
@@ -87,9 +89,13 @@ pub fn type_check(term: &Term, ctx: &TypeContext) -> Result<(Type, TypeContext),
                 });
             }
 
+            // Lean4 spec: HasType (Context.add Γ₂ {name:=x, mult:=q, type:=τ₁}) e₂ τ₂
+            // Extend ctx1 (context after value) with the binding
             let body_ctx = ctx1.extend(var.clone(), multiplicity.clone(), annot.clone());
             let (body_ty, ctx2) = type_check(body, &body_ctx)?;
 
+            // Lean4 spec: HasType (Context.addCtx Γ₁ Γ₂) (Term.letTerm ...) τ₂
+            // Final context is outer context (Γ₁) + context after body (Γ₂)
             let final_ctx = ctx.add(&ctx2).map_err(|_e| TypeError::BorrowContextMix)?;
 
             Ok((body_ty, final_ctx))
@@ -187,6 +193,28 @@ pub fn type_check(term: &Term, ctx: &TypeContext) -> Result<(Type, TypeContext),
                     expected: left_ty,
                     found: right_ty,
                 });
+            }
+
+            let is_arithmetic = matches!(
+                op,
+                crate::core::ast::BinOp::Add
+                    | crate::core::ast::BinOp::Sub
+                    | crate::core::ast::BinOp::Mul
+                    | crate::core::ast::BinOp::Div
+                    | crate::core::ast::BinOp::Mod
+            );
+
+            if is_arithmetic {
+                match &left_ty {
+                    Type::Native(crate::core::ast::types::NativeKind::Int)
+                    | Type::Native(crate::core::ast::types::NativeKind::Float) => {}
+                    _ => {
+                        return Err(TypeError::TypeMismatch {
+                            expected: Type::int(),
+                            found: left_ty,
+                        });
+                    }
+                }
             }
 
             let result_ty = match op {
@@ -356,7 +384,7 @@ pub fn type_check_with_borrow_check(term: &Term) -> Result<Type, TypeError> {
     let ctx = TypeContext::new();
     let (ty, _) = type_check(term, &ctx)?;
 
-    let checker = BorrowChecker::new();
+    let mut checker = BorrowChecker::new();
     checker.check(term)?;
 
     Ok(ty)

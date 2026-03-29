@@ -48,7 +48,7 @@ impl PrimOp {
     pub fn apply(&self, args: &[Literal]) -> Option<Literal> {
         match self {
             PrimOp::Add => {
-                let a = args.get(0)?;
+                let a = args.first()?;
                 let b = args.get(1)?;
                 if let (Literal::Int(x), Literal::Int(y)) = (a, b) {
                     return Some(Literal::Int(x + y));
@@ -56,7 +56,7 @@ impl PrimOp {
                 None
             }
             PrimOp::Sub => {
-                let a = args.get(0)?;
+                let a = args.first()?;
                 let b = args.get(1)?;
                 if let (Literal::Int(x), Literal::Int(y)) = (a, b) {
                     return Some(Literal::Int(x - y));
@@ -64,7 +64,7 @@ impl PrimOp {
                 None
             }
             PrimOp::Mul => {
-                let a = args.get(0)?;
+                let a = args.first()?;
                 let b = args.get(1)?;
                 if let (Literal::Int(x), Literal::Int(y)) = (a, b) {
                     return Some(Literal::Int(x * y));
@@ -72,7 +72,7 @@ impl PrimOp {
                 None
             }
             PrimOp::Div => {
-                let a = args.get(0)?;
+                let a = args.first()?;
                 let b = args.get(1)?;
                 if let (Literal::Int(x), Literal::Int(y)) = (a, b) {
                     if *y != 0 {
@@ -82,7 +82,7 @@ impl PrimOp {
                 None
             }
             PrimOp::Mod => {
-                let a = args.get(0)?;
+                let a = args.first()?;
                 let b = args.get(1)?;
                 if let (Literal::Int(x), Literal::Int(y)) = (a, b) {
                     if *y != 0 {
@@ -92,17 +92,17 @@ impl PrimOp {
                 None
             }
             PrimOp::Eq => {
-                let a = args.get(0)?;
+                let a = args.first()?;
                 let b = args.get(1)?;
                 Some(Literal::Bool(a == b))
             }
             PrimOp::Ne => {
-                let a = args.get(0)?;
+                let a = args.first()?;
                 let b = args.get(1)?;
                 Some(Literal::Bool(a != b))
             }
             PrimOp::Lt => {
-                let a = args.get(0)?;
+                let a = args.first()?;
                 let b = args.get(1)?;
                 if let (Literal::Int(x), Literal::Int(y)) = (a, b) {
                     return Some(Literal::Bool(x < y));
@@ -110,7 +110,7 @@ impl PrimOp {
                 None
             }
             PrimOp::Gt => {
-                let a = args.get(0)?;
+                let a = args.first()?;
                 let b = args.get(1)?;
                 if let (Literal::Int(x), Literal::Int(y)) = (a, b) {
                     return Some(Literal::Bool(x > y));
@@ -118,7 +118,7 @@ impl PrimOp {
                 None
             }
             PrimOp::Le => {
-                let a = args.get(0)?;
+                let a = args.first()?;
                 let b = args.get(1)?;
                 if let (Literal::Int(x), Literal::Int(y)) = (a, b) {
                     return Some(Literal::Bool(x <= y));
@@ -126,7 +126,7 @@ impl PrimOp {
                 None
             }
             PrimOp::Ge => {
-                let a = args.get(0)?;
+                let a = args.first()?;
                 let b = args.get(1)?;
                 if let (Literal::Int(x), Literal::Int(y)) = (a, b) {
                     return Some(Literal::Bool(x >= y));
@@ -134,7 +134,7 @@ impl PrimOp {
                 None
             }
             PrimOp::And => {
-                let a = args.get(0)?;
+                let a = args.first()?;
                 let b = args.get(1)?;
                 if let (Literal::Bool(x), Literal::Bool(y)) = (a, b) {
                     return Some(Literal::Bool(*x && *y));
@@ -142,7 +142,7 @@ impl PrimOp {
                 None
             }
             PrimOp::Or => {
-                let a = args.get(0)?;
+                let a = args.first()?;
                 let b = args.get(1)?;
                 if let (Literal::Bool(x), Literal::Bool(y)) = (a, b) {
                     return Some(Literal::Bool(*x || *y));
@@ -150,14 +150,14 @@ impl PrimOp {
                 None
             }
             PrimOp::Not => {
-                let a = args.get(0)?;
+                let a = args.first()?;
                 if let Literal::Bool(x) = a {
                     return Some(Literal::Bool(!x));
                 }
                 None
             }
             PrimOp::Neg => {
-                let a = args.get(0)?;
+                let a = args.first()?;
                 if let Literal::Int(x) = a {
                     return Some(Literal::Int(-x));
                 }

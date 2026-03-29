@@ -5,15 +5,11 @@ use crate::runtime::primitives::PrimOp;
 
 pub struct NetBuilder {
     net: Net,
-    name_counter: usize,
 }
 
 impl NetBuilder {
     pub fn new() -> NetBuilder {
-        NetBuilder {
-            net: Net::new(),
-            name_counter: 0,
-        }
+        NetBuilder { net: Net::new() }
     }
 
     pub fn build(mut self, term: &Term) -> Net {
@@ -33,7 +29,7 @@ impl NetBuilder {
             Term::App { fun, arg } => self.translate_app(fun, arg),
             Term::Let {
                 var: _,
-                multiplicity,
+                multiplicity: _,
                 annot: _,
                 value,
                 body,

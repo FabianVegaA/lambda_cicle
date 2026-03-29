@@ -1,4 +1,4 @@
-use super::{NodeId, PortIndex};
+use super::PortIndex;
 use crate::runtime::primitives::PrimOp;
 
 #[derive(Debug, Clone)]

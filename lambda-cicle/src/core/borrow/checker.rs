@@ -6,6 +6,7 @@ use crate::core::typecheck::TypeError;
 #[derive(Debug, Clone)]
 pub struct BorrowChecker {
     scope_stack: Vec<Vec<String>>,
+    active_borrows: Vec<String>,
 }
 
 #[allow(dead_code)]
@@ -13,12 +14,13 @@ impl BorrowChecker {
     pub fn new() -> BorrowChecker {
         BorrowChecker {
             scope_stack: Vec::new(),
+            active_borrows: Vec::new(),
         }
     }
 
-    pub fn check(&self, term: &Term) -> Result<(), TypeError> {
-        let mut checker = BorrowChecker::new();
-        checker.check_term(term)
+    pub fn check(&mut self, term: &Term) -> Result<(), TypeError> {
+        self.check_term(term)?;
+        self.check_borrow_escape(term)
     }
 
     fn check_term(&mut self, term: &Term) -> Result<(), TypeError> {
@@ -126,6 +128,50 @@ impl BorrowChecker {
             }
         }
         false
+    }
+
+    fn check_borrow_escape(&self, term: &Term) -> Result<(), TypeError> {
+        match term {
+            Term::Var(name) => {
+                if self.is_borrow_in_scope(name) {
+                    return Err(TypeError::OwnershipEscape(name.clone()));
+                }
+                Ok(())
+            }
+            Term::Abs { body, .. } => self.check_borrow_escape(body),
+            Term::App { fun, arg } => {
+                self.check_borrow_escape(fun)?;
+                self.check_borrow_escape(arg)
+            }
+            Term::Let { body, .. } => self.check_borrow_escape(body),
+            Term::Match { scrutinee, arms } => {
+                self.check_borrow_escape(scrutinee)?;
+                for arm in arms {
+                    self.check_borrow_escape(&arm.body)?;
+                }
+                Ok(())
+            }
+            Term::View { scrutinee, arms } => {
+                self.check_borrow_escape(scrutinee)?;
+                for arm in arms {
+                    self.check_borrow_escape(&arm.body)?;
+                }
+                Ok(())
+            }
+            Term::TraitMethod { arg, .. } => self.check_borrow_escape(arg),
+            Term::Constructor(_, args) => {
+                for arg in args {
+                    self.check_borrow_escape(arg)?;
+                }
+                Ok(())
+            }
+            Term::NativeLiteral(_) => Ok(()),
+            Term::BinaryOp { left, right, .. } => {
+                self.check_borrow_escape(left)?;
+                self.check_borrow_escape(right)
+            }
+            Term::UnaryOp { arg, .. } => self.check_borrow_escape(arg),
+        }
     }
 
     fn add_pattern_binds(&mut self, pattern: &Pattern, as_borrow: bool) -> Result<(), TypeError> {
