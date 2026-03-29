@@ -1,0 +1,2 @@
+-- Lambda application - apply increment to 5
+(\x : Int. x) 5

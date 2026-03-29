@@ -95,12 +95,6 @@ impl BorrowChecker {
                 Ok(())
             }
             Term::NativeLiteral(_) => Ok(()),
-            Term::BinaryOp { op: _, left, right } => {
-                self.check_term(left)?;
-                self.check_term(right)?;
-                Ok(())
-            }
-            Term::UnaryOp { op: _, arg } => self.check_term(arg),
         }
     }
 
@@ -166,11 +160,6 @@ impl BorrowChecker {
                 Ok(())
             }
             Term::NativeLiteral(_) => Ok(()),
-            Term::BinaryOp { left, right, .. } => {
-                self.check_borrow_escape(left)?;
-                self.check_borrow_escape(right)
-            }
-            Term::UnaryOp { arg, .. } => self.check_borrow_escape(arg),
         }
     }
 

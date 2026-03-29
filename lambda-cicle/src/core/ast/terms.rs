@@ -34,99 +34,6 @@ impl fmt::Display for Literal {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum BinOp {
-    Add,
-    Sub,
-    Mul,
-    Div,
-    Mod,
-    Eq,
-    Ne,
-    Lt,
-    Gt,
-    Le,
-    Ge,
-    And,
-    Or,
-}
-
-impl BinOp {
-    pub fn from_symbol(s: &str) -> Option<BinOp> {
-        match s {
-            "+" => Some(BinOp::Add),
-            "-" => Some(BinOp::Sub),
-            "*" => Some(BinOp::Mul),
-            "/" => Some(BinOp::Div),
-            "%" => Some(BinOp::Mod),
-            "==" => Some(BinOp::Eq),
-            "!=" => Some(BinOp::Ne),
-            "<" => Some(BinOp::Lt),
-            ">" => Some(BinOp::Gt),
-            "<=" => Some(BinOp::Le),
-            ">=" => Some(BinOp::Ge),
-            "&&" => Some(BinOp::And),
-            "||" => Some(BinOp::Or),
-            _ => None,
-        }
-    }
-
-    pub fn precedence(&self) -> u8 {
-        match self {
-            BinOp::Or => 1,
-            BinOp::And => 2,
-            BinOp::Eq | BinOp::Ne | BinOp::Lt | BinOp::Gt | BinOp::Le | BinOp::Ge => 3,
-            BinOp::Add | BinOp::Sub => 4,
-            BinOp::Mul | BinOp::Div | BinOp::Mod => 5,
-        }
-    }
-}
-
-impl fmt::Display for BinOp {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            BinOp::Add => write!(f, "+"),
-            BinOp::Sub => write!(f, "-"),
-            BinOp::Mul => write!(f, "*"),
-            BinOp::Div => write!(f, "/"),
-            BinOp::Mod => write!(f, "%"),
-            BinOp::Eq => write!(f, "=="),
-            BinOp::Ne => write!(f, "!="),
-            BinOp::Lt => write!(f, "<"),
-            BinOp::Gt => write!(f, ">"),
-            BinOp::Le => write!(f, "<="),
-            BinOp::Ge => write!(f, ">="),
-            BinOp::And => write!(f, "&&"),
-            BinOp::Or => write!(f, "||"),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum UnOp {
-    Neg,
-    Not,
-}
-
-impl UnOp {
-    pub fn from_symbol(s: &str) -> Option<UnOp> {
-        match s {
-            "-" => Some(UnOp::Neg),
-            "!" => Some(UnOp::Not),
-            _ => None,
-        }
-    }
-}
-
-impl fmt::Display for UnOp {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            UnOp::Neg => write!(f, "-"),
-            UnOp::Not => write!(f, "!"),
-        }
-    }
-}
-
 #[derive(Debug, Clone, PartialEq)]
 pub struct Arm {
     pub pattern: super::Pattern,
@@ -177,15 +84,6 @@ pub enum Term {
     },
     Constructor(String, Vec<Term>),
     NativeLiteral(Literal),
-    BinaryOp {
-        op: BinOp,
-        left: Box<Term>,
-        right: Box<Term>,
-    },
-    UnaryOp {
-        op: UnOp,
-        arg: Box<Term>,
-    },
 }
 
 impl Term {
@@ -245,21 +143,6 @@ impl Term {
 
     pub fn literal(lit: Literal) -> Term {
         Term::NativeLiteral(lit)
-    }
-
-    pub fn binary(op: BinOp, left: Term, right: Term) -> Term {
-        Term::BinaryOp {
-            op,
-            left: Box::new(left),
-            right: Box::new(right),
-        }
-    }
-
-    pub fn unary(op: UnOp, arg: Term) -> Term {
-        Term::UnaryOp {
-            op,
-            arg: Box::new(arg),
-        }
     }
 
     pub fn trait_method(trait_name: TraitName, method: MethodName, arg: Term) -> Term {
@@ -340,12 +223,6 @@ impl fmt::Display for Term {
                 )
             }
             Term::NativeLiteral(lit) => write!(f, "{}", lit),
-            Term::BinaryOp { op, left, right } => {
-                write!(f, "({} {} {})", left, op, right)
-            }
-            Term::UnaryOp { op, arg } => {
-                write!(f, "({}{})", op, arg)
-            }
         }
     }
 }

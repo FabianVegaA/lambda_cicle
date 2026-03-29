@@ -86,13 +86,6 @@ fn collect_exports(term: &crate::core::ast::Term, exports: &mut Exports) {
                 collect_exports(&arm.body, exports);
             }
         }
-        crate::core::ast::Term::BinaryOp { left, right, .. } => {
-            collect_exports(left, exports);
-            collect_exports(right, exports);
-        }
-        crate::core::ast::Term::UnaryOp { arg, .. } => {
-            collect_exports(arg, exports);
-        }
         _ => {}
     }
 }

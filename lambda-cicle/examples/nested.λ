@@ -1,0 +1,2 @@
+-- Nested lambda applications - identity function
+(\x. x) (\y. y) 1

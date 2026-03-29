@@ -60,13 +60,6 @@ fn collect_impls(term: &crate::core::ast::Term, impls: &mut Vec<Implementation>)
                 collect_impls(&arm.body, impls);
             }
         }
-        crate::core::ast::Term::BinaryOp { left, right, .. } => {
-            collect_impls(left, impls);
-            collect_impls(right, impls);
-        }
-        crate::core::ast::Term::UnaryOp { arg, .. } => {
-            collect_impls(arg, impls);
-        }
         _ => {}
     }
 }

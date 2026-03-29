@@ -184,63 +184,6 @@ pub fn type_check(term: &Term, ctx: &TypeContext) -> Result<(Type, TypeContext),
             )))
         }
         Term::NativeLiteral(lit) => Ok((lit.ty(), ctx.clone())),
-        Term::BinaryOp { op, left, right } => {
-            let (left_ty, ctx1) = type_check(left, ctx)?;
-            let (right_ty, ctx2) = type_check(right, &ctx1)?;
-
-            if left_ty != right_ty {
-                return Err(TypeError::TypeMismatch {
-                    expected: left_ty,
-                    found: right_ty,
-                });
-            }
-
-            let is_arithmetic = matches!(
-                op,
-                crate::core::ast::BinOp::Add
-                    | crate::core::ast::BinOp::Sub
-                    | crate::core::ast::BinOp::Mul
-                    | crate::core::ast::BinOp::Div
-                    | crate::core::ast::BinOp::Mod
-            );
-
-            if is_arithmetic {
-                match &left_ty {
-                    Type::Native(crate::core::ast::types::NativeKind::Int)
-                    | Type::Native(crate::core::ast::types::NativeKind::Float) => {}
-                    _ => {
-                        return Err(TypeError::TypeMismatch {
-                            expected: Type::int(),
-                            found: left_ty,
-                        });
-                    }
-                }
-            }
-
-            let result_ty = match op {
-                crate::core::ast::BinOp::Add
-                | crate::core::ast::BinOp::Sub
-                | crate::core::ast::BinOp::Mul
-                | crate::core::ast::BinOp::Div
-                | crate::core::ast::BinOp::Mod => left_ty,
-                crate::core::ast::BinOp::Eq
-                | crate::core::ast::BinOp::Ne
-                | crate::core::ast::BinOp::Lt
-                | crate::core::ast::BinOp::Gt
-                | crate::core::ast::BinOp::Le
-                | crate::core::ast::BinOp::Ge
-                | crate::core::ast::BinOp::And
-                | crate::core::ast::BinOp::Or => Type::bool(),
-            };
-
-            let final_ctx = ctx1.add(&ctx2).map_err(|_e| TypeError::BorrowContextMix)?;
-
-            Ok((result_ty, final_ctx))
-        }
-        Term::UnaryOp { op: _, arg } => {
-            let (arg_ty, final_ctx) = type_check(arg, ctx)?;
-            Ok((arg_ty, final_ctx))
-        }
     }
 }
 
