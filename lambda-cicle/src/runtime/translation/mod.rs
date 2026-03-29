@@ -1,7 +1,6 @@
 use crate::core::ast::types::Multiplicity;
 use crate::core::ast::{Arm, Literal, Pattern, Term};
 use crate::runtime::net::{Agent, Net, Node, NodeId, Port, PortIndex, Wire};
-use crate::runtime::primitives::PrimOp;
 
 pub struct NetBuilder {
     net: Net,
@@ -43,8 +42,6 @@ impl NetBuilder {
             Term::View { scrutinee, arms } => self.translate_view(scrutinee, arms),
             Term::Constructor(name, args) => self.translate_constructor(name, args),
             Term::NativeLiteral(lit) => self.translate_literal(lit),
-            Term::BinaryOp { op, left, right } => self.translate_binop(op, left, right),
-            Term::UnaryOp { op, arg } => self.translate_unaryop(op, arg),
             Term::TraitMethod {
                 trait_name: _,
                 method: _,
@@ -54,8 +51,11 @@ impl NetBuilder {
     }
 
     fn translate_var(&mut self, name: &str) -> NodeId {
-        let node = Node::new(Agent::Constructor(name.to_string()), 0);
-        self.net.add_node(node)
+        let node = Node::constructor(name.to_string(), 2);
+        let id = self.net.add_node(node);
+        self.net.add_free_port(id, PortIndex(0));
+        self.net.add_free_port(id, PortIndex(1));
+        id
     }
 
     fn translate_abs(&mut self, mult: &Multiplicity, body: &Term) -> NodeId {
@@ -65,6 +65,10 @@ impl NetBuilder {
         let body_id = self.translate_term(body);
 
         self.connect_ports(lambda_id, 2, body_id, 0);
+
+        if let Term::Var(_) = body {
+            self.connect_ports(lambda_id, 0, body_id, 1);
+        }
 
         match mult {
             Multiplicity::One => lambda_id,
@@ -168,38 +172,10 @@ impl NetBuilder {
     }
 
     fn translate_literal(&mut self, lit: &Literal) -> NodeId {
-        let node = Node::constructor(format!("{:?}", lit), 0);
-        self.net.add_node(node)
-    }
-
-    fn translate_binop(
-        &mut self,
-        op: &crate::core::ast::BinOp,
-        left: &Term,
-        right: &Term,
-    ) -> NodeId {
-        let prim_op = PrimOp::from_ast_op(op);
-        let node = Node::prim(prim_op);
-        let node_id = self.net.add_node(node);
-
-        let left_id = self.translate_term(left);
-        let right_id = self.translate_term(right);
-
-        self.connect_ports(left_id, 0, node_id, 0);
-        self.connect_ports(right_id, 0, node_id, 1);
-
-        node_id
-    }
-
-    fn translate_unaryop(&mut self, op: &crate::core::ast::UnOp, arg: &Term) -> NodeId {
-        let prim_op = PrimOp::from_unary_op(op);
-        let node = Node::prim(prim_op);
-        let node_id = self.net.add_node(node);
-
-        let arg_id = self.translate_term(arg);
-        self.connect_ports(arg_id, 0, node_id, 0);
-
-        node_id
+        let node = Node::constructor(format!("{}", lit), 1);
+        let id = self.net.add_node(node);
+        self.net.add_free_port(id, PortIndex(0));
+        id
     }
 
     fn connect_ports(

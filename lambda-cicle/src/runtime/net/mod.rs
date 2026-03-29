@@ -28,7 +28,7 @@ impl NodeId {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum InteractionResult {
     BetaReduction,
     Duplication,
@@ -191,13 +191,13 @@ impl Net {
                 continue;
             }
 
-            let _app_port_1 = self.get_connected_port(app_id, PortIndex(1))?;
+            let (arg_node, arg_port) = self.get_connected_port(app_id, PortIndex(1))?;
 
             self.disconnect_port(lambda_id, PortIndex(1))?;
-            self.disconnect_port(app_id, PortIndex(0))?;
+            self.disconnect_port(app_id, PortIndex(1))?;
 
-            self.connect(app_id, PortIndex(1), lambda_id, PortIndex(1));
-            self.connect(lambda_id, PortIndex(2), app_id, PortIndex(2));
+            self.connect(arg_node, arg_port, lambda_id, PortIndex(2));
+            self.connect(lambda_id, PortIndex(0), app_id, PortIndex(2));
 
             return Some(InteractionResult::BetaReduction);
         }

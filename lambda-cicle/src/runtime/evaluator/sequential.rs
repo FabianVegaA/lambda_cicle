@@ -1,6 +1,6 @@
 use super::{EvalError, Evaluator};
 use crate::core::ast::{Literal, Term};
-use crate::runtime::net::{Agent, Net, NodeId, PortIndex};
+use crate::runtime::net::{Agent, InteractionResult, Net, NodeId, PortIndex};
 
 pub struct SequentialEvaluator {
     max_steps: usize,
@@ -29,12 +29,12 @@ impl Evaluator for SequentialEvaluator {
         let mut steps = 0;
 
         while steps < self.max_steps {
-            if net.is_stuck() {
+            let result = net.step();
+            steps += 1;
+
+            if result == InteractionResult::None {
                 break;
             }
-
-            net.step();
-            steps += 1;
         }
 
         if steps >= self.max_steps {
@@ -51,29 +51,21 @@ fn extract_result(net: &Net) -> Option<Term> {
         return Some(Term::NativeLiteral(Literal::Unit));
     }
 
-    for (id, node) in net.nodes().iter().enumerate() {
-        if matches!(node.agent, Agent::Constructor(_) | Agent::Prim(_)) {
-            let mut has_free_ports = false;
-            for port_idx in 0..node.num_ports() {
-                if net
-                    .get_connected_port(NodeId(id), PortIndex(port_idx))
-                    .is_none()
-                {
-                    has_free_ports = true;
-                    break;
-                }
+    for (node_id, node) in net.nodes().iter().enumerate() {
+        if let Agent::Constructor(name) = &node.agent {
+            if let Ok(n) = name.parse::<i64>() {
+                return Some(Term::NativeLiteral(Literal::Int(n)));
             }
-            if !has_free_ports && node.num_ports() == 0 {
-                match &node.agent {
-                    Agent::Constructor(name) => {
-                        return Some(Term::Var(name.clone()));
-                    }
-                    Agent::Prim(_) => {
-                        return Some(Term::NativeLiteral(Literal::Unit));
-                    }
-                    _ => {}
-                }
+            if let Ok(b) = name.parse::<bool>() {
+                return Some(Term::NativeLiteral(Literal::Bool(b)));
             }
+            if name == "()" || name == "Unit" {
+                return Some(Term::NativeLiteral(Literal::Unit));
+            }
+        }
+
+        if let Agent::Prim(_) = &node.agent {
+            return Some(Term::NativeLiteral(Literal::Unit));
         }
     }
 

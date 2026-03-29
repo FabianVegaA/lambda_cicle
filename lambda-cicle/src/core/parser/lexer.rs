@@ -9,6 +9,7 @@ pub enum Token {
     KwFalse,
     KwForall,
     KwUnit,
+    KwLambda,
     TyInt,
     TyFloat,
     TyBool,
@@ -138,7 +139,7 @@ impl Lexer {
                 }
                 Some('λ') => {
                     self.advance();
-                    tokens.push(Token::Ident("λ".to_string()));
+                    tokens.push(Token::KwLambda);
                 }
                 Some(c) => {
                     return Err(LexError::UnexpectedChar(c, self.line, self.col));
@@ -151,7 +152,7 @@ impl Lexer {
     }
 
     fn is_at_end(&self) -> bool {
-        self.pos >= self.input.len()
+        self.pos >= self.input.chars().count() as usize
     }
 
     fn peek(&self) -> Option<char> {
@@ -159,7 +160,7 @@ impl Lexer {
     }
 
     fn peek_next(&self) -> Option<char> {
-        self.input.chars().nth(self.pos + 1)
+        self.input.chars().nth(self.pos + 1 as usize)
     }
 
     fn advance(&mut self) -> char {
@@ -192,12 +193,13 @@ impl Lexer {
     }
 
     fn read_number(&mut self) -> Result<Token, LexError> {
-        let start = self.pos;
+        let mut result = String::new();
         let mut has_dot = false;
 
         while let Some(c) = self.peek() {
             match c {
                 '0'..='9' => {
+                    result.push(c);
                     self.advance();
                 }
                 '.' => {
@@ -205,13 +207,18 @@ impl Lexer {
                         return Err(LexError::UnexpectedChar('.', self.line, self.col));
                     }
                     has_dot = true;
+                    result.push(c);
                     self.advance();
                 }
                 _ => break,
             }
         }
 
-        let num_str = &self.input[start..self.pos];
+        if result.is_empty() {
+            return Err(LexError::InvalidNumber("empty".to_string()));
+        }
+
+        let num_str = result.as_str();
         if has_dot {
             match num_str.parse::<f64>() {
                 Ok(n) => Ok(Token::FloatLit(n)),
@@ -226,15 +233,16 @@ impl Lexer {
     }
 
     fn read_identifier(&mut self) -> Result<String, LexError> {
-        let start = self.pos;
+        let mut result = String::new();
         while let Some(c) = self.peek() {
             if c.is_alphanumeric() || c == '_' {
+                result.push(c);
                 self.advance();
             } else {
                 break;
             }
         }
-        Ok(self.input[start..self.pos].to_string())
+        Ok(result)
     }
 
     fn keyword_or_ident(&self, s: &str) -> Token {

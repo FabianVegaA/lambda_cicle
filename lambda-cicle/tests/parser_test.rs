@@ -46,7 +46,7 @@ fn test_parse_application() {
     assert!(result.is_ok());
     let term = result.unwrap();
     match term {
-        Term::App { fun, arg } => match *fun {
+        Term::App { fun, arg: _ } => match *fun {
             Term::Var(name) => assert_eq!(name, "f"),
             _ => panic!("Expected f"),
         },
@@ -58,4 +58,40 @@ fn test_parse_application() {
 fn test_parse_nested_application() {
     let result = parse("f x y");
     assert!(result.is_ok());
+}
+
+#[test]
+fn test_parse_lambda_syntax() {
+    let result = parse("λx:1:Int.x");
+    assert!(
+        result.is_ok(),
+        "Lambda (λ) syntax should parse: {:?}",
+        result
+    );
+    let term = result.unwrap();
+    match term {
+        Term::Abs { var, .. } => assert_eq!(var, "x"),
+        _ => panic!("Expected lambda abstraction"),
+    }
+}
+
+#[test]
+fn test_parse_lambda_application() {
+    let result = parse("(λx:1:Int.x) 5");
+    assert!(
+        result.is_ok(),
+        "Lambda application should parse: {:?}",
+        result
+    );
+}
+
+#[test]
+fn test_parse_unit() {
+    let result = parse("Unit");
+    assert!(result.is_ok(), "Unit should parse: {:?}", result);
+    let term = result.unwrap();
+    match term {
+        Term::NativeLiteral(Literal::Unit) => (),
+        _ => panic!("Expected unit literal, got {:?}", term),
+    }
 }

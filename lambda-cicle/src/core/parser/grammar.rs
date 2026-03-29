@@ -75,17 +75,44 @@ impl<'a> Parser<'a> {
                 self.advance();
                 Ok(Term::literal(Literal::Unit))
             }
+            Some(Token::KwUnit) => {
+                self.advance();
+                Ok(Term::literal(Literal::Unit))
+            }
             Some(Token::Ident(name)) => {
                 let name = name.clone();
                 self.advance();
                 Ok(Term::var(name))
             }
+            Some(Token::KwLambda) => self.lambda_expr(),
             Some(Token::KwLet) => self.let_expr(),
             Some(Token::KwMatch) => self.match_expr(),
             Some(Token::KwView) => self.view_expr(),
             Some(Token::LParen) => self.parens_expr(),
             _ => Err(ParseError::UnexpectedToken(format!("{:?}", self.peek()))),
         }
+    }
+
+    fn lambda_expr(&mut self) -> Result<Term, ParseError> {
+        self.consume(&Token::KwLambda)?;
+
+        let var = match self.peek() {
+            Some(Token::Ident(name)) => {
+                let n = name.clone();
+                self.advance();
+                n
+            }
+            _ => return Err(ParseError::UnexpectedToken("expected variable".to_string())),
+        };
+
+        self.consume(&Token::Colon)?;
+        let mult = self.multiplicity()?;
+        self.consume(&Token::Colon)?;
+        let annot = self.ty()?;
+        self.consume(&Token::Dot)?;
+        let body = self.term()?;
+
+        Ok(Term::abs(var, mult, annot, body))
     }
 
     fn let_expr(&mut self) -> Result<Term, ParseError> {
