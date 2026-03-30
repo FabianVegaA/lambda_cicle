@@ -1,4 +1,5 @@
 use crate::core::ast::types::{MethodName, Multiplicity, TraitName, Type};
+use crate::runtime::PrimOp;
 use std::fmt;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -8,16 +9,42 @@ pub enum Literal {
     Bool(bool),
     Char(char),
     Unit,
+    Prim(PrimOp),
 }
 
 impl Literal {
     pub fn ty(&self) -> Type {
+        let division_by_zero = Type::inductive("DivisionByZero".to_string(), vec![]);
         match self {
             Literal::Int(_) => Type::int(),
             Literal::Float(_) => Type::float(),
             Literal::Bool(_) => Type::bool(),
             Literal::Char(_) => Type::char(),
             Literal::Unit => Type::unit(),
+            Literal::Prim(op) => match op {
+                PrimOp::Neg => Type::arrow(Type::int(), Multiplicity::One, Type::int()),
+                PrimOp::Add | PrimOp::Sub | PrimOp::Mul => Type::arrow(
+                    Type::int(),
+                    Multiplicity::One,
+                    Type::arrow(Type::int(), Multiplicity::One, Type::int()),
+                ),
+                PrimOp::Div | PrimOp::Rem => Type::arrow(
+                    Type::int(),
+                    Multiplicity::One,
+                    Type::arrow(
+                        Type::int(),
+                        Multiplicity::One,
+                        Type::inductive("Result".to_string(), vec![Type::int(), division_by_zero]),
+                    ),
+                ),
+                PrimOp::Eq | PrimOp::Ne | PrimOp::Lt | PrimOp::Gt | PrimOp::Le | PrimOp::Ge => {
+                    Type::arrow(
+                        Type::int(),
+                        Multiplicity::One,
+                        Type::arrow(Type::int(), Multiplicity::One, Type::bool()),
+                    )
+                }
+            },
         }
     }
 }
@@ -30,6 +57,7 @@ impl fmt::Display for Literal {
             Literal::Bool(b) => write!(f, "{}", b),
             Literal::Char(c) => write!(f, "'{}'", c),
             Literal::Unit => write!(f, "()"),
+            Literal::Prim(op) => write!(f, "prim({:?})", op),
         }
     }
 }

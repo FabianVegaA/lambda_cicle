@@ -3,6 +3,7 @@ use crate::core::ast::{
     Arm, Decl, Literal, MethodDef, MethodName, MethodSig, Multiplicity, Pattern, Term, TraitName,
     Type, UseMode, Visibility,
 };
+use crate::runtime::PrimOp;
 
 pub struct Parser<'a> {
     tokens: &'a [Token],
@@ -282,7 +283,49 @@ impl<'a> Parser<'a> {
     }
 
     fn term(&mut self) -> Result<Term, ParseError> {
-        self.app_expr()
+        self.add_expr()
+    }
+
+    fn add_expr(&mut self) -> Result<Term, ParseError> {
+        let mut left = self.mul_expr()?;
+        while matches!(self.peek(), Some(Token::Plus) | Some(Token::Minus)) {
+            let op = self.peek().cloned();
+            self.advance();
+            let right = self.mul_expr()?;
+            let prim_op = match op {
+                Some(Token::Plus) => PrimOp::Add,
+                Some(Token::Minus) => PrimOp::Sub,
+                _ => unreachable!(),
+            };
+            left = Term::app(
+                Term::app(Term::NativeLiteral(Literal::Prim(prim_op)), left),
+                right,
+            );
+        }
+        Ok(left)
+    }
+
+    fn mul_expr(&mut self) -> Result<Term, ParseError> {
+        let mut left = self.app_expr()?;
+        while matches!(
+            self.peek(),
+            Some(Token::Star) | Some(Token::Slash) | Some(Token::Percent)
+        ) {
+            let op = self.peek().cloned();
+            self.advance();
+            let right = self.app_expr()?;
+            let prim_op = match op {
+                Some(Token::Star) => PrimOp::Mul,
+                Some(Token::Slash) => PrimOp::Div,
+                Some(Token::Percent) => PrimOp::Rem,
+                _ => unreachable!(),
+            };
+            left = Term::app(
+                Term::app(Term::NativeLiteral(Literal::Prim(prim_op)), left),
+                right,
+            );
+        }
+        Ok(left)
     }
 
     fn app_expr(&mut self) -> Result<Term, ParseError> {

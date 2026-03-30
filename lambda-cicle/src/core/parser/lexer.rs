@@ -39,6 +39,11 @@ pub enum Token {
     Arrow,
     Pipe,
     Underscore,
+    Plus,
+    Minus,
+    Star,
+    Slash,
+    Percent,
     IntLit(i64),
     FloatLit(f64),
     BoolLit(bool),
@@ -114,6 +119,22 @@ impl Lexer {
                     self.advance();
                     tokens.push(Token::Pipe);
                 }
+                Some('+') => {
+                    self.advance();
+                    tokens.push(Token::Plus);
+                }
+                Some('*') => {
+                    self.advance();
+                    tokens.push(Token::Star);
+                }
+                Some('/') => {
+                    self.advance();
+                    tokens.push(Token::Slash);
+                }
+                Some('%') => {
+                    self.advance();
+                    tokens.push(Token::Percent);
+                }
                 Some('_') => {
                     self.advance();
                     tokens.push(Token::Underscore);
@@ -124,7 +145,7 @@ impl Lexer {
                         self.advance();
                         tokens.push(Token::Arrow);
                     } else {
-                        return Err(LexError::UnexpectedChar('-', self.line, self.col));
+                        tokens.push(Token::Minus);
                     }
                 }
                 Some('0') | Some('1') => {
