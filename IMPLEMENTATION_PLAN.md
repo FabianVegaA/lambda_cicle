@@ -719,7 +719,7 @@ cargo fmt
 | 5.3 | Import Resolution | ✅ DONE |
 | 5.4 | Orphan Rule Enforcement | ✅ DONE |
 | 5.5 | Full .λo Format | ✅ DONE |
-| 5.6 | CLI Build Commands | ⏳ Next |
+| 5.6 | CLI Build Commands | ✅ DONE |
 
 #### Current State (Already Implemented)
 
@@ -745,7 +745,6 @@ cargo fmt
 | Module DAG (cycle detection) | HIGH |
 | Full `.λo` format | MEDIUM |
 | Incremental recompilation | MEDIUM |
-| CLI build commands | HIGH |
 
 #### Implementation Steps
 
@@ -769,13 +768,11 @@ cargo fmt
 - Type section, Trait section, Net section, Export table, Debug section
 - MessagePack serialization
 
-**Step 5.6**: Incremental Recompilation
-- Export table hashing
-- Compare hashes before downstream recompilation
-
-**Step 5.7**: CLI Commands
-- `build` command - Compile to .λo
-- `link` command - Link to executable
+**Step 5.6**: CLI Build Commands
+- `build` command - Compile .λ to .λo object file
+- `link` command - Link .λo files to executable
+- `clean` command - Remove build artifacts
+- Added `From<std::io::Error>` for `ModuleError` to handle file I/O
 
 #### Files to Create
 

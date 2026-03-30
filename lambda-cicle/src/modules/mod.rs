@@ -63,3 +63,11 @@ impl From<crate::runtime::evaluator::EvalError> for ModuleError {
         }
     }
 }
+
+impl From<std::io::Error> for ModuleError {
+    fn from(e: std::io::Error) -> Self {
+        ModuleError {
+            message: format!("IO error: {}", e),
+        }
+    }
+}

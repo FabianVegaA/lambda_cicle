@@ -1,4 +1,5 @@
 use clap::{Parser, Subcommand};
+use lambda_cicle::modules::{link, serialize_module, Exports, Module};
 use lambda_cicle::runtime::evaluator::{Evaluator, SequentialEvaluator};
 use lambda_cicle::tools::{net_to_dot, run_benchmark, run_repl, TraceDebugger};
 use lambda_cicle::{parse, translate, type_check_with_borrow_check};
@@ -57,6 +58,33 @@ enum Commands {
         /// Number of iterations
         #[arg(short, long, default_value = "100")]
         iterations: usize,
+    },
+
+    /// Compile a .λ file to .λo object file
+    Build {
+        /// Source file to compile
+        file: PathBuf,
+
+        /// Output file (default: <input>.o)
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+    },
+
+    /// Link .λo files into an executable
+    Link {
+        /// Object files to link
+        files: Vec<PathBuf>,
+
+        /// Output executable file
+        #[arg(short, long)]
+        output: PathBuf,
+    },
+
+    /// Remove build artifacts
+    Clean {
+        /// Directory to clean (default: current directory)
+        #[arg(default_value = ".")]
+        directory: PathBuf,
     },
 }
 
@@ -130,6 +158,69 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 // Run default benchmarks
                 lambda_cicle::tools::bench::run_default_benchmarks();
             }
+        }
+
+        Commands::Build { file, output } => {
+            let source = std::fs::read_to_string(&file)?;
+            let term = parse(&source)?;
+            let _ty = type_check_with_borrow_check(&term)?;
+            let net = translate(&term);
+
+            let module = Module {
+                name: file
+                    .file_stem()
+                    .unwrap_or_default()
+                    .to_string_lossy()
+                    .to_string(),
+                exports: Exports::from_term(&term, _ty),
+                impls: Vec::new(),
+                net,
+            };
+
+            let output_path = output.unwrap_or_else(|| {
+                let mut p = file.clone();
+                p.set_extension("o");
+                p
+            });
+
+            lambda_cicle::modules::serialize_module(&module)
+                .and_then(|data| {
+                    std::fs::write(&output_path, data)?;
+                    Ok(())
+                })
+                .map_err(|e| format!("Build failed: {}", e))?;
+
+            println!("Compiled {} -> {}", file.display(), output_path.display());
+        }
+
+        Commands::Link { files, output } => {
+            let object_files: Vec<PathBuf> = files;
+
+            lambda_cicle::modules::link(&object_files, &output)
+                .map_err(|e| format!("Link failed: {}", e))?;
+
+            println!(
+                "Linked {} files -> {}",
+                object_files.len(),
+                output.display()
+            );
+        }
+
+        Commands::Clean { directory } => {
+            let dir_path = &directory;
+
+            for entry in std::fs::read_dir(dir_path)? {
+                let entry = entry?;
+                let path = entry.path();
+                if let Some(ext) = path.extension() {
+                    if ext == "o" {
+                        std::fs::remove_file(&path)?;
+                        println!("Removed {}", path.display());
+                    }
+                }
+            }
+
+            println!("Cleaned directory {}", directory.display());
         }
     }
 
