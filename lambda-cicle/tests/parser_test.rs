@@ -37,7 +37,16 @@ fn test_parse_variable() {
 #[test]
 fn test_parse_let() {
     let result = parse("let x:1:Int = 5 in x");
-    assert!(result.is_ok());
+    assert!(result.is_ok(), "Failed to parse: {:?}", result);
+}
+
+#[test]
+fn test_parse_let_multi_digit() {
+    for value in &[5, 10, 42, 100] {
+        let source = format!("let x:1:Int = {} in x", value);
+        let result = parse(&source);
+        assert!(result.is_ok(), "Failed to parse {}: {:?}", value, result);
+    }
 }
 
 #[test]

@@ -128,10 +128,28 @@ impl Lexer {
                     }
                 }
                 Some('0') => {
+                    // Check if followed by another digit (multi-digit number)
+                    if let Some(next_ch) = self.peek_next() {
+                        if next_ch.is_ascii_digit() {
+                            // This is a multi-digit number, not multiplicity
+                            let num = self.read_number()?;
+                            tokens.push(num);
+                            continue;
+                        }
+                    }
                     self.advance();
                     tokens.push(Token::MultiplicityZero);
                 }
                 Some('1') => {
+                    // Check if followed by another digit (multi-digit number)
+                    if let Some(next_ch) = self.peek_next() {
+                        if next_ch.is_ascii_digit() {
+                            // This is a multi-digit number, not multiplicity
+                            let num = self.read_number()?;
+                            tokens.push(num);
+                            continue;
+                        }
+                    }
                     self.advance();
                     tokens.push(Token::MultiplicityOne);
                 }
