@@ -9,6 +9,11 @@ pub type Result a e (..)
 pub type Ordering (..)
 pub type DivisionByZero (..)
 
+-- Boolean logic functions (§16.2)
+pub val not : Bool -> Bool = \x : Bool. match x with { True -> False | False -> True }
+pub val and : Bool -> Bool -> Bool = \x : Bool. \y : Bool. match x with { True -> y | False -> False }
+pub val or : Bool -> Bool -> Bool = \x : Bool. \y : Bool. match x with { True -> True | False -> y }
+
 -- Traits with method signatures
 pub trait Eq a where { val eq: &a -> &a -> Bool }
 pub trait Ord a where Eq a where { val compare: &a -> &a -> Ordering }

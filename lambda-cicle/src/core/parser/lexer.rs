@@ -36,20 +36,9 @@ pub enum Token {
     Dot,
     DotDot,
     Equals,
-    EqEq,
-    Neq,
-    Lt,
-    Gt,
-    Le,
-    Ge,
     Arrow,
     Pipe,
     Underscore,
-    Plus,
-    Minus,
-    Star,
-    Slash,
-    Percent,
     IntLit(i64),
     FloatLit(f64),
     BoolLit(bool),
@@ -117,61 +106,13 @@ impl Lexer {
                         tokens.push(Token::Dot);
                     }
                 }
-                Some('=') => {
-                    self.advance();
-                    if self.peek() == Some('=') {
-                        self.advance();
-                        tokens.push(Token::EqEq);
-                    } else {
-                        tokens.push(Token::Equals);
-                    }
-                }
-                Some('!') => {
-                    self.advance();
-                    if self.peek() == Some('=') {
-                        self.advance();
-                        tokens.push(Token::Neq);
-                    } else {
-                        return Err(LexError::UnexpectedChar('!', self.line, self.col));
-                    }
-                }
-                Some('<') => {
-                    self.advance();
-                    if self.peek() == Some('=') {
-                        self.advance();
-                        tokens.push(Token::Le);
-                    } else {
-                        tokens.push(Token::Lt);
-                    }
-                }
-                Some('>') => {
-                    self.advance();
-                    if self.peek() == Some('=') {
-                        self.advance();
-                        tokens.push(Token::Ge);
-                    } else {
-                        tokens.push(Token::Gt);
-                    }
-                }
                 Some('|') => {
                     self.advance();
                     tokens.push(Token::Pipe);
                 }
-                Some('+') => {
+                Some('=') => {
                     self.advance();
-                    tokens.push(Token::Plus);
-                }
-                Some('*') => {
-                    self.advance();
-                    tokens.push(Token::Star);
-                }
-                Some('/') => {
-                    self.advance();
-                    tokens.push(Token::Slash);
-                }
-                Some('%') => {
-                    self.advance();
-                    tokens.push(Token::Percent);
+                    tokens.push(Token::Equals);
                 }
                 Some('_') => {
                     self.advance();
@@ -183,7 +124,7 @@ impl Lexer {
                         self.advance();
                         tokens.push(Token::Arrow);
                     } else {
-                        tokens.push(Token::Minus);
+                        return Err(LexError::UnexpectedChar('-', self.line, self.col));
                     }
                 }
                 Some('0') | Some('1') => {
