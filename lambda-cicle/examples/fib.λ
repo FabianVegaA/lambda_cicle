@@ -1,4 +1,4 @@
 -- Let bindings chain
-let a = 1 in
-let b = a in
+let a : Int = 1 in
+let b : Int = a in
 b

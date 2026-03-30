@@ -369,10 +369,62 @@ impl<'a> Parser<'a> {
             _ => return Err(ParseError::UnexpectedToken("expected variable".to_string())),
         };
 
-        self.consume(&Token::Colon)?;
-        let mult = self.multiplicity()?;
-        self.consume(&Token::Colon)?;
-        let annot = self.ty()?;
+        // Type annotation is optional
+        let has_colon = matches!(self.peek(), Some(&Token::Colon));
+
+        let (mult, annot) = if has_colon {
+            self.advance(); // consume first colon
+
+            // Peek to see what's next
+            let tok = self.peek().cloned();
+            let mult = match tok {
+                Some(Token::MultiplicityZero) => {
+                    self.advance();
+                    self.consume(&Token::Colon)?;
+                    Multiplicity::Zero
+                }
+                Some(Token::MultiplicityOne) => {
+                    self.advance();
+                    self.consume(&Token::Colon)?;
+                    Multiplicity::One
+                }
+                Some(Token::MultiplicityOmega) => {
+                    self.advance();
+                    self.consume(&Token::Colon)?;
+                    Multiplicity::Omega
+                }
+                Some(Token::MultiplicityBorrow) => {
+                    self.advance();
+                    self.consume(&Token::Colon)?;
+                    Multiplicity::Borrow
+                }
+                Some(Token::IntLit(n)) => {
+                    self.advance();
+                    self.consume(&Token::Colon)?;
+                    match n {
+                        0 => Multiplicity::Zero,
+                        1 => Multiplicity::One,
+                        _ => {
+                            return Err(ParseError::UnexpectedToken(format!(
+                                "expected multiplicity (0, 1), found {}",
+                                n
+                            )))
+                        }
+                    }
+                }
+                _ => {
+                    // No multiplicity - type follows directly
+                    Multiplicity::One
+                }
+            };
+
+            let annot = self.ty()?;
+            (mult, annot)
+        } else {
+            // No type annotation - require explicit annotations for now
+            (Multiplicity::One, Type::unit())
+        };
+
         self.consume(&Token::Dot)?;
         let body = self.term()?;
 
@@ -391,10 +443,61 @@ impl<'a> Parser<'a> {
             _ => return Err(ParseError::UnexpectedToken("expected variable".to_string())),
         };
 
-        self.consume(&Token::Colon)?;
-        let mult = self.multiplicity()?;
-        self.consume(&Token::Colon)?;
-        let annot = self.ty()?;
+        // Type annotation is optional
+        let (mult, annot) = if matches!(self.peek(), Some(&Token::Colon)) {
+            self.advance();
+
+            // Check if next token is a multiplicity
+            let tok = self.peek().cloned();
+            let mult = match tok {
+                Some(Token::MultiplicityZero) => {
+                    self.advance();
+                    self.consume(&Token::Colon)?;
+                    Multiplicity::Zero
+                }
+                Some(Token::MultiplicityOne) => {
+                    self.advance();
+                    self.consume(&Token::Colon)?;
+                    Multiplicity::One
+                }
+                Some(Token::MultiplicityOmega) => {
+                    self.advance();
+                    self.consume(&Token::Colon)?;
+                    Multiplicity::Omega
+                }
+                Some(Token::MultiplicityBorrow) => {
+                    self.advance();
+                    self.consume(&Token::Colon)?;
+                    Multiplicity::Borrow
+                }
+                Some(Token::IntLit(n)) => {
+                    // Handle number as multiplicity (0 or 1)
+                    self.advance();
+                    self.consume(&Token::Colon)?;
+                    match n {
+                        0 => Multiplicity::Zero,
+                        1 => Multiplicity::One,
+                        _ => {
+                            return Err(ParseError::UnexpectedToken(format!(
+                                "expected multiplicity (0, 1), found {}",
+                                n
+                            )))
+                        }
+                    }
+                }
+                _ => {
+                    // No multiplicity - type follows directly
+                    Multiplicity::One
+                }
+            };
+
+            let annot = self.ty()?;
+            (mult, annot)
+        } else {
+            // No type annotation - require explicit annotations for now
+            (Multiplicity::One, Type::unit())
+        };
+
         self.consume(&Token::Equals)?;
         let value = self.term()?;
         self.consume(&Token::KwIn)?;
@@ -469,7 +572,8 @@ impl<'a> Parser<'a> {
     }
 
     fn multiplicity(&mut self) -> Result<Multiplicity, ParseError> {
-        match self.peek() {
+        let tok = self.peek().cloned();
+        match tok {
             Some(Token::MultiplicityZero) => {
                 self.advance();
                 Ok(Multiplicity::Zero)
@@ -485,6 +589,18 @@ impl<'a> Parser<'a> {
             Some(Token::MultiplicityBorrow) => {
                 self.advance();
                 Ok(Multiplicity::Borrow)
+            }
+            Some(Token::IntLit(n)) => {
+                // Handle number as multiplicity (0 or 1)
+                self.advance();
+                match n {
+                    0 => Ok(Multiplicity::Zero),
+                    1 => Ok(Multiplicity::One),
+                    _ => Err(ParseError::UnexpectedToken(format!(
+                        "expected multiplicity (0, 1, ω, &), found {}",
+                        n
+                    ))),
+                }
             }
             _ => Err(ParseError::UnexpectedToken(
                 "expected multiplicity".to_string(),

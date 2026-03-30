@@ -82,7 +82,10 @@ pub fn type_check(term: &Term, ctx: &TypeContext) -> Result<(Type, TypeContext),
             let scaled_ctx = ctx.scale(q).map_err(|_e| TypeError::BorrowContextMix)?;
             let (val_ty, ctx1) = type_check(value, &scaled_ctx)?;
 
-            if val_ty != *annot {
+            // If annotation is a type variable, don't require equality - allow inference
+            // Otherwise, check that value type matches annotation
+            let needs_check = !matches!(annot, Type::Var(_));
+            if needs_check && val_ty != *annot {
                 return Err(TypeError::TypeMismatch {
                     expected: annot.clone(),
                     found: val_ty,

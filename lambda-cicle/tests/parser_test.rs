@@ -50,6 +50,39 @@ fn test_parse_let_multi_digit() {
 }
 
 #[test]
+fn test_parse_lambda_no_annotation() {
+    let source = r"\x. x";
+    let result = parse(source);
+    eprintln!("Testing: {:?}", source);
+    eprintln!("Result: {:?}", result);
+    assert!(result.is_ok(), "Failed to parse: {:?}", result);
+}
+
+#[test]
+fn test_parse_lambda_with_type() {
+    let source = r"\x : Int. x";
+    let result = parse(source);
+    eprintln!("Testing: {:?}", source);
+    eprintln!("Result: {:?}", result);
+    assert!(result.is_ok(), "Failed to parse: {:?}", result);
+}
+
+#[test]
+fn test_parse_lambda_nested() {
+    // Test just "1" alone
+    let result0 = parse("1");
+    eprintln!("Parse '1': {:?}", result0);
+
+    // Test simpler cases first
+    let source1 = "(\\x. x) 1";
+    let result1 = parse(source1);
+    eprintln!("Testing: {:?}", source1);
+    eprintln!("Result: {:?}", result1);
+
+    assert!(result1.is_ok(), "Failed: {:?}", result1);
+}
+
+#[test]
 fn test_parse_application() {
     let result = parse("f x");
     assert!(result.is_ok());
@@ -85,13 +118,23 @@ fn test_parse_lambda_syntax() {
 }
 
 #[test]
-fn test_parse_lambda_application() {
-    let result = parse("(λx:1:Int.x) 5");
-    assert!(
-        result.is_ok(),
-        "Lambda application should parse: {:?}",
-        result
-    );
+fn test_parse_lambda_no_mult() {
+    // \x : Int. x - type but no multiplicity
+    let source = r"(\x : Int. x) 5";
+    let result = parse(source);
+    eprintln!("Testing: {:?}", source);
+    eprintln!("Result: {:?}", result);
+    assert!(result.is_ok(), "Failed: {:?}", result);
+}
+
+#[test]
+fn test_parse_lambda_with_mult() {
+    // \x :1: Int. x - explicit multiplicity
+    let source = r"(\x :1: Int. x) 5";
+    let result = parse(source);
+    eprintln!("Testing: {:?}", source);
+    eprintln!("Result: {:?}", result);
+    assert!(result.is_ok(), "Failed: {:?}", result);
 }
 
 #[test]

@@ -127,31 +127,10 @@ impl Lexer {
                         return Err(LexError::UnexpectedChar('-', self.line, self.col));
                     }
                 }
-                Some('0') => {
-                    // Check if followed by another digit (multi-digit number)
-                    if let Some(next_ch) = self.peek_next() {
-                        if next_ch.is_ascii_digit() {
-                            // This is a multi-digit number, not multiplicity
-                            let num = self.read_number()?;
-                            tokens.push(num);
-                            continue;
-                        }
-                    }
-                    self.advance();
-                    tokens.push(Token::MultiplicityZero);
-                }
-                Some('1') => {
-                    // Check if followed by another digit (multi-digit number)
-                    if let Some(next_ch) = self.peek_next() {
-                        if next_ch.is_ascii_digit() {
-                            // This is a multi-digit number, not multiplicity
-                            let num = self.read_number()?;
-                            tokens.push(num);
-                            continue;
-                        }
-                    }
-                    self.advance();
-                    tokens.push(Token::MultiplicityOne);
+                Some('0') | Some('1') => {
+                    // Always treat as start of number - read the full number
+                    let num = self.read_number()?;
+                    tokens.push(num);
                 }
                 Some('ω') => {
                     self.advance();
@@ -171,6 +150,10 @@ impl Lexer {
                     tokens.push(token);
                 }
                 Some('λ') => {
+                    self.advance();
+                    tokens.push(Token::KwLambda);
+                }
+                Some('\\') => {
                     self.advance();
                     tokens.push(Token::KwLambda);
                 }

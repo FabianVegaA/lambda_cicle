@@ -1,2 +1,2 @@
--- Nested lambda applications - identity function
-(\x. x) (\y. y) 1
+-- Nested lambda applications
+(\x : Int. (\y : Int. y) x) 1
