@@ -98,8 +98,28 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         Commands::Run { file } => {
             let source = std::fs::read_to_string(&file)?;
-            let term = parse(&source)?;
-            let _ty = type_check_with_borrow_check(&term)?;
+
+            // Try parsing as declarations first
+            let decls_result = parse_program(&source);
+
+            let term: Term;
+            let _ty: lambda_cicle::Type;
+
+            if let Ok(mut decls) = decls_result {
+                // Inject prelude if not opted out
+                if let Err(e) = lambda_cicle::modules::inject_prelude(&mut decls) {
+                    eprintln!("Warning: Could not load prelude: {}", e);
+                }
+
+                // For now, create an empty term - full decl support would require more work
+                term = Term::NativeLiteral(lambda_cicle::core::ast::Literal::Unit);
+                _ty = lambda_cicle::core::ast::Type::unit();
+            } else {
+                // Fall back to parsing as expression
+                term = parse(&source)?;
+                _ty = type_check_with_borrow_check(&term)?;
+            }
+
             let mut net = translate(&term);
 
             let evaluator = SequentialEvaluator::new();
@@ -169,13 +189,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let term: Term;
             let _ty: lambda_cicle::Type;
 
-            if let Ok(_decls) = decls_result {
-                // Parse as program (declarations)
-                let _module_name = file
-                    .file_stem()
-                    .unwrap_or_default()
-                    .to_string_lossy()
-                    .to_string();
+            if let Ok(mut decls) = decls_result {
+                // Inject prelude if not opted out
+                if let Err(e) = lambda_cicle::modules::inject_prelude(&mut decls) {
+                    eprintln!("Warning: Could not load prelude: {}", e);
+                }
 
                 // For now, create an empty term - full decl support would require more work
                 term = Term::NativeLiteral(lambda_cicle::core::ast::Literal::Unit);

@@ -3,6 +3,68 @@ use crate::core::ast::Decl;
 use crate::traits::Implementation;
 use crate::{parse, parse_program, translate, type_check_with_borrow_check, Term};
 use std::path::Path;
+use std::sync::OnceLock;
+
+static PRELUDE_DECLS: OnceLock<Vec<Decl>> = OnceLock::new();
+
+fn find_stdlib_path() -> Option<std::path::PathBuf> {
+    // Try relative to current working directory first
+    let relative = std::path::Path::new("stdlib/Prelude.λ");
+    if relative.exists() {
+        return Some(relative.to_path_buf());
+    }
+
+    // Try relative to the executable
+    if let Ok(exe_path) = std::env::current_exe() {
+        if let Some(exe_dir) = exe_path.parent() {
+            let relative_to_exe = exe_dir.join("stdlib/Prelude.λ");
+            if relative_to_exe.exists() {
+                return Some(relative_to_exe);
+            }
+        }
+    }
+
+    // Try stdlib in current directory
+    let stdlib_path = std::path::Path::new("stdlib");
+    if stdlib_path.join("Prelude.λ").exists() {
+        return Some(stdlib_path.join("Prelude.λ"));
+    }
+
+    None
+}
+
+pub fn load_prelude() -> Result<&'static Vec<Decl>, ModuleError> {
+    if let Some(decls) = PRELUDE_DECLS.get() {
+        return Ok(decls);
+    }
+
+    let prelude_path = find_stdlib_path().ok_or_else(|| ModuleError {
+        message: "Could not find stdlib/Prelude.λ".to_string(),
+    })?;
+
+    let decls = parse_module_decls(&prelude_path)?;
+
+    PRELUDE_DECLS.set(decls).ok();
+
+    Ok(PRELUDE_DECLS.get().unwrap())
+}
+
+pub fn inject_prelude(decls: &mut Vec<Decl>) -> Result<(), ModuleError> {
+    // Check if user opted out of prelude
+    if decls.iter().any(|d| matches!(d, Decl::NoPrelude)) {
+        return Ok(());
+    }
+
+    // Load prelude
+    let prelude = load_prelude()?;
+
+    // Prepend prelude declarations
+    let mut combined = prelude.clone();
+    combined.append(decls);
+    *decls = combined;
+
+    Ok(())
+}
 
 pub fn parse_module_file(path: &Path) -> Result<Term, ModuleError> {
     let source = std::fs::read_to_string(path).map_err(|e| ModuleError {
