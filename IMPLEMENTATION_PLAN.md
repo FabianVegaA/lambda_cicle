@@ -715,7 +715,8 @@ cargo fmt
 | Step | Description | Status |
 |------|-------------|--------|
 | 5.1 | Parser extensions for module syntax | ✅ DONE |
-| 5.2 | Visibility & Export System | ⏳ Next |
+| 5.2 | Visibility & Export System | ✅ DONE |
+| 5.3 | Import Resolution | ⏳ Next |
 
 #### Current State (Already Implemented)
 
