@@ -1,10 +1,12 @@
 pub mod export;
 pub mod linker;
 pub mod loader;
+pub mod serializer;
 
 pub use export::Exports;
 pub use linker::link;
 pub use loader::{compile_module, load_module, parse_module_file};
+pub use serializer::{deserialize_module, get_export_hash, serialize_module};
 
 use crate::runtime::net::Net;
 use crate::traits::Implementation;
