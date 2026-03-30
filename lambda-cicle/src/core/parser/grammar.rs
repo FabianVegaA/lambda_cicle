@@ -130,22 +130,59 @@ impl<'a> Parser<'a> {
         self.consume(&Token::KwTrait)?;
         let name = self.expect_ident()?;
         let params = self.parse_type_params()?;
-        self.consume(&Token::KwWhere)?;
-        self.consume(&Token::LBrace)?;
-        let mut methods = Vec::new();
-        while !matches!(self.peek(), Some(&Token::RBrace)) {
-            let method_name_str = self.expect_ident()?;
-            self.consume(&Token::Colon)?;
-            let method_ty = self.ty()?;
-            methods.push(MethodSig {
-                name: MethodName(method_name_str),
-                ty: method_ty,
-            });
-            if matches!(self.peek(), Some(Token::RBrace)) {
+
+        // Handle optional where clause with supertrait
+        // Syntax: where TraitName type_param* [where {...}]
+        // We may have multiple where clauses - keep consuming until we hit {
+        loop {
+            if matches!(self.peek(), Some(&Token::LBrace)) {
+                break;
+            }
+            if matches!(self.peek(), Some(&Token::KwWhere)) {
+                self.advance();
+                // Skip supertrait parsing - consume the identifier and type params
+                if matches!(self.peek(), Some(&Token::Ident(_))) {
+                    self.advance();
+                    // Consume type params (type application)
+                    while matches!(self.peek(), Some(&Token::Ident(_)))
+                        || matches!(self.peek(), Some(&Token::TyInt))
+                        || matches!(self.peek(), Some(&Token::TyFloat))
+                        || matches!(self.peek(), Some(&Token::TyBool))
+                        || matches!(self.peek(), Some(&Token::TyChar))
+                        || matches!(self.peek(), Some(&Token::KwUnit))
+                    {
+                        self.advance();
+                    }
+                }
+            } else {
                 break;
             }
         }
-        self.consume(&Token::RBrace)?;
+
+        // Handle optional trait body - may be absent for marker traits
+        let mut methods = Vec::new();
+        if matches!(self.peek(), Some(&Token::LBrace)) {
+            self.consume(&Token::LBrace)?;
+            while !matches!(self.peek(), Some(&Token::RBrace)) {
+                // Parse optional "val" keyword
+                if matches!(self.peek(), Some(&Token::KwVal)) {
+                    self.advance();
+                }
+
+                let method_name_str = self.expect_ident()?;
+                self.consume(&Token::Colon)?;
+                let method_ty = self.ty()?;
+                methods.push(MethodSig {
+                    name: MethodName(method_name_str),
+                    ty: method_ty,
+                });
+                if matches!(self.peek(), Some(Token::RBrace)) {
+                    break;
+                }
+            }
+            self.consume(&Token::RBrace)?;
+        }
+
         Ok(Decl::TraitDecl {
             visibility,
             name,
@@ -456,7 +493,49 @@ impl<'a> Parser<'a> {
     }
 
     fn ty(&mut self) -> Result<Type, ParseError> {
-        self.ty_atom()
+        self.ty_arrow()
+    }
+
+    fn ty_arrow(&mut self) -> Result<Type, ParseError> {
+        let mut lhs = self.ty_app()?;
+
+        if matches!(self.peek(), Some(&Token::Arrow)) {
+            self.advance();
+            let rhs = self.ty_arrow()?;
+            lhs = Type::arrow(lhs, Multiplicity::One, rhs);
+        }
+
+        Ok(lhs)
+    }
+
+    fn ty_app(&mut self) -> Result<Type, ParseError> {
+        let mut ty = self.ty_atom()?;
+
+        while matches!(self.peek(), Some(&Token::Ident(_)))
+            || matches!(self.peek(), Some(&Token::TyInt))
+            || matches!(self.peek(), Some(&Token::TyFloat))
+            || matches!(self.peek(), Some(&Token::TyBool))
+            || matches!(self.peek(), Some(&Token::TyChar))
+            || matches!(self.peek(), Some(&Token::KwUnit))
+            || matches!(self.peek(), Some(&Token::LParen))
+            || matches!(self.peek(), Some(&Token::MultiplicityBorrow))
+        {
+            let arg = self.ty_atom()?;
+            ty = match &ty {
+                Type::Inductive(name, args) => {
+                    let mut new_args = args.clone();
+                    new_args.push(arg);
+                    Type::inductive(name.0.clone(), new_args)
+                }
+                _ => {
+                    return Err(ParseError::UnexpectedToken(
+                        "expected type constructor".to_string(),
+                    ))
+                }
+            };
+        }
+
+        Ok(ty)
     }
 
     fn ty_atom(&mut self) -> Result<Type, ParseError> {
@@ -481,16 +560,40 @@ impl<'a> Parser<'a> {
                 self.advance();
                 Ok(Type::char())
             }
+            Some(Token::MultiplicityBorrow) => {
+                self.advance();
+                let inner = self.ty_atom()?;
+                Ok(Type::borrow(inner))
+            }
             Some(Token::Ident(name)) => {
                 let name = name.clone();
                 self.advance();
-                Ok(Type::inductive(name, vec![]))
+                if name
+                    .chars()
+                    .next()
+                    .map(|c| c.is_lowercase())
+                    .unwrap_or(false)
+                {
+                    Ok(Type::Var(name))
+                } else {
+                    Ok(Type::inductive(name, vec![]))
+                }
             }
             Some(Token::LParen) => {
                 self.consume(&Token::LParen)?;
                 let ty = self.ty()?;
-                self.consume(&Token::RParen)?;
-                Ok(ty)
+                match self.peek() {
+                    Some(Token::Comma) => {
+                        self.advance();
+                        let ty2 = self.ty()?;
+                        self.consume(&Token::RParen)?;
+                        Ok(Type::product(ty, ty2))
+                    }
+                    _ => {
+                        self.consume(&Token::RParen)?;
+                        Ok(ty)
+                    }
+                }
             }
             _ => Err(ParseError::UnexpectedToken("expected type".to_string())),
         }

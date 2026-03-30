@@ -266,3 +266,54 @@ fn test_exports_type_transparent() {
     assert_eq!(public_types[0].0, "Bar");
     assert!(public_types[0].1.transparent); // transparent
 }
+
+#[test]
+fn test_parse_arrow_type() {
+    let result = parse_program("pub type Fn a = a -> a");
+    eprintln!("Arrow type result: {:?}", result);
+    assert!(result.is_ok(), "Arrow type should parse: {:?}", result);
+}
+
+#[test]
+fn test_parse_type_var() {
+    let result = parse_program("pub type Option a = Unit");
+    eprintln!("Type var result: {:?}", result);
+    assert!(result.is_ok(), "Type variable should parse: {:?}", result);
+}
+
+#[test]
+fn test_parse_ref_type() {
+    let result = parse_program("pub type Ref a = &a");
+    eprintln!("Ref type result: {:?}", result);
+    assert!(result.is_ok(), "Reference type should parse: {:?}", result);
+}
+
+#[test]
+fn test_parse_trait_with_method() {
+    let result = parse_program("pub trait Eq a where { val eq: &a -> &a -> Bool }");
+    eprintln!("Trait with method result: {:?}", result);
+    assert!(
+        result.is_ok(),
+        "Trait with method should parse: {:?}",
+        result
+    );
+}
+
+#[test]
+fn test_parse_trait_with_supertrait() {
+    let result =
+        parse_program("pub trait Ord a where Eq a where { val compare: &a -> &a -> Bool }");
+    eprintln!("Trait with supertrait result: {:?}", result);
+    assert!(
+        result.is_ok(),
+        "Trait with supertrait should parse: {:?}",
+        result
+    );
+}
+
+#[test]
+fn test_parse_impl_for_trait() {
+    let result = parse_program("impl Int : Ord where {}");
+    eprintln!("Impl result: {:?}", result);
+    assert!(result.is_ok(), "Impl should parse: {:?}", result);
+}

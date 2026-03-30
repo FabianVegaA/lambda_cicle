@@ -9,20 +9,20 @@ pub type Result a e (..)
 pub type Ordering (..)
 pub type DivisionByZero (..)
 
--- Traits
-pub trait Eq a where {}
-pub trait Ord a where {}
-pub trait Hash a where {}
-pub trait Clone a where {}
-pub trait Copy a where {}
-pub trait Drop a where {}
-pub trait Sized a where {}
-pub trait Add a where {}
-pub trait Sub a where {}
-pub trait Mul a where {}
-pub trait Div a where {}
-pub trait Rem a where {}
-pub trait Neg a where {}
+-- Traits with method signatures
+pub trait Eq a where { val eq: &a -> &a -> Bool }
+pub trait Ord a where Eq a where { val compare: &a -> &a -> Ordering }
+pub trait Hash a where Eq a where { val hash: &a -> Int }
+pub trait Clone a where { val clone: &a -> a }
+pub trait Copy a where Clone a
+pub trait Drop a where { val drop: a -> Unit }
+pub trait Sized a
+pub trait Add a where { val add: a -> a -> a }
+pub trait Sub a where { val sub: a -> a -> a }
+pub trait Mul a where { val mul: a -> a -> a }
+pub trait Div a where { val div: a -> a -> Result a DivisionByZero }
+pub trait Rem a where { val rem: a -> a -> Result a DivisionByZero }
+pub trait Neg a where { val neg: a -> a }
 
 -- Native Type Implementations
 impl Int : Eq where {}

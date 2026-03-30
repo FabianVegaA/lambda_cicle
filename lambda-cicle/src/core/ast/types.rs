@@ -119,6 +119,7 @@ pub enum Type {
     Borrow(Box<Type>),
     Product(Box<Type>, Box<Type>),
     Sum(Box<Type>, Box<Type>),
+    Var(String),
 }
 
 impl Type {
@@ -212,6 +213,9 @@ impl fmt::Display for Type {
             }
             Type::Sum(left, right) => {
                 write!(f, "{} + {}", left, right)
+            }
+            Type::Var(name) => {
+                write!(f, "{}", name)
             }
         }
     }

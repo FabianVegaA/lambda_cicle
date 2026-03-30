@@ -797,6 +797,17 @@ src/main.rs                  # Add build/link commands
 
 **Goal**: Implement stdlib per §16 of design document v2.4
 
+> **Note**: The design document (§12) designates **Phase 5a** as a prerequisite for Phase 5 & 6.
+> Phase 5a covers grammar extensions needed to express the module system and stdlib syntax.
+
+**Phase 5a Requirements** (per §2.A.3, §2.A.5):
+- Arrow types (`->`)
+- Type application (`Option a`)
+- Type variables (`a`, `α`)
+- Reference types (`&a`)
+- Trait method signatures
+- Trait implementations with methods
+
 #### Completed Steps
 
 | Step | Description | Status |
@@ -807,13 +818,32 @@ src/main.rs                  # Add build/link commands
 | 6.4 | CLI build supports parse_program for declarations | ✅ DONE |
 | 6.5 | Grammar fixes for type keywords as type names | ✅ DONE |
 
-#### Grammar Limitations (Needs Enhancement)
+#### Grammar Enhancements Required (Phase 5a per §2.A.3)
 
-- No arrow types (`->`) in type position
-- No reference types (`&`) in type position  
-- No type application syntax (`Option a`)
-- Traits require `where {}` even without constraints
-- Val declarations need `= expression` not just type annotation
+The design document marks several productions as **Phase 5a prerequisites** - required for stdlib:
+
+| Production | Design §2.A.3 | Current Status | Priority |
+|------------|---------------|----------------|----------|
+| `type -> type` (arrow) | §2.A.3 line 159 | ✅ DONE | HIGH |
+| `type_atom type_atom` (type app) | §2.A.3 line 163 | ✅ DONE | HIGH |
+| `lower_identifier` (type var) | §2.A.3 line 173 | ✅ DONE | HIGH |
+| `& type_atom` (reference) | §2.A.3 line 174 | ✅ DONE | MEDIUM |
+| `(type, type)` (product) | §2.A.3 line 176 | ✅ DONE | LOW |
+| `upper_identifier` (type constr) | §2.A.3 line 172 | ✅ DONE | MEDIUM |
+| Trait `sig` (method signature) | §2.A.5 line 235 | ✅ DONE | HIGH |
+| Trait `val_def` (impl method) | §2.A.5 line 238 | ✅ DONE | HIGH |
+| Trait without body (marker) | §2.A.5 | ✅ DONE | HIGH |
+| `impl T for C` syntax | §2.A.5 line 225 | ⚠️ Using `impl T : C` | PENDING |
+
+#### Current Grammar Issues
+
+1. ~~**Arrow types**: `ty()` only parses atoms, not `a -> b`~~ ✅ FIXED
+2. ~~**Type application**: `Option a` fails - expects `)` after `Option`~~ ✅ FIXED
+3. ~~**Type variables**: `a` in type position fails - expects uppercase~~ ✅ FIXED
+4. ~~**Reference types**: `&a` in type position not parsed~~ ✅ FIXED
+5. ~~**Trait methods**: `trait Eq a where { val eq: &a -> &a -> Bool }` fails~~ ✅ FIXED
+6. ~~**Trait without body**: `trait Copy a where Clone a` fails~~ ✅ FIXED
+7. **Impl syntax**: Design uses `impl T for C`, current uses `impl T : C` | PENDING
 
 #### Stdlib Structure
 
@@ -833,15 +863,23 @@ Std/
 
 **Step 6.2**: Prelude trait declarations ✅ DONE
 
-**Step 6.3**: Implement Std.String
+**Step 6.3**: Grammar enhancements (Phase 5a) - Needed before stdlib
+- Add arrow type parsing (`type -> type`)
+- Add type variable parsing (`lower_identifier` in type position)
+- Add type application parsing (`Option a`)
+- Add reference type parsing (`&a`)
+- Fix trait method signatures
+- Fix impl syntax to `impl T for C`
 
-**Step 6.4**: Implement Std.List
+**Step 6.4**: Implement Std.String
 
-**Step 6.5**: Implement Std.Map
+**Step 6.5**: Implement Std.List
 
-**Step 6.6**: Implement Std.Show
+**Step 6.6**: Implement Std.Map
 
-**Step 6.7**: Implement Std.IO
+**Step 6.7**: Implement Std.Show
+
+**Step 6.8**: Implement Std.IO
 
 ### Test Coverage
 
@@ -855,8 +893,8 @@ Std/
 
 ### What's Next
 
-- Phase 6: Standard Library (remaining: String, List, Map, Show, IO)
-- Grammar enhancements (arrow types, reference types, type application)
+- **Phase 5a**: Grammar enhancements (arrow types, type application, type variables, reference types, trait methods)
+- Phase 6: Complete remaining stdlib modules (String, List, Map, Show, IO)
 - Version 1.0 Release
 
 ---

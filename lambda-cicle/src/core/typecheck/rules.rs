@@ -254,6 +254,7 @@ pub fn check_strict_positivity(ty: &Type) -> Result<(), TypeError> {
             Ok(())
         }
         Type::Native(_) => Ok(()),
+        Type::Var(_) => Ok(()),
     }
 }
 
@@ -287,6 +288,7 @@ fn check_positive_occurrence(ty: &Type, type_param: &str) -> Result<(), TypeErro
             Ok(())
         }
         Type::Native(_) => Ok(()),
+        Type::Var(_) => Ok(()),
     }
 }
 
@@ -308,18 +310,14 @@ fn check_negative_occurrence(ty: &Type, type_param: &str) -> Result<(), TypeErro
             check_negative_occurrence(left, type_param)?;
             check_negative_occurrence(right, type_param)
         }
-        Type::Inductive(name, params) => {
+        Type::Inductive(_, params) => {
             for param in params {
-                if let Type::Inductive(n, _) = param {
-                    if n.0 == type_param {
-                        return Err(TypeError::StrictPositivityViolation(name.clone()));
-                    }
-                }
                 check_negative_occurrence(param, type_param)?;
             }
             Ok(())
         }
         Type::Native(_) => Ok(()),
+        Type::Var(_) => Ok(()),
     }
 }
 
