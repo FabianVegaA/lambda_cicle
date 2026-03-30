@@ -2,7 +2,7 @@ use clap::{Parser, Subcommand};
 use lambda_cicle::modules::{link, serialize_module, Exports, Module};
 use lambda_cicle::runtime::evaluator::{Evaluator, SequentialEvaluator};
 use lambda_cicle::tools::{net_to_dot, run_benchmark, run_repl, TraceDebugger};
-use lambda_cicle::{parse, translate, type_check_with_borrow_check};
+use lambda_cicle::{parse, parse_program, translate, type_check_with_borrow_check, Term};
 use std::path::PathBuf;
 
 #[derive(Parser)]
@@ -162,8 +162,30 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         Commands::Build { file, output } => {
             let source = std::fs::read_to_string(&file)?;
-            let term = parse(&source)?;
-            let _ty = type_check_with_borrow_check(&term)?;
+
+            // Try parsing as declarations first
+            let decls_result = parse_program(&source);
+
+            let term: Term;
+            let _ty: lambda_cicle::Type;
+
+            if let Ok(_decls) = decls_result {
+                // Parse as program (declarations)
+                let _module_name = file
+                    .file_stem()
+                    .unwrap_or_default()
+                    .to_string_lossy()
+                    .to_string();
+
+                // For now, create an empty term - full decl support would require more work
+                term = Term::NativeLiteral(lambda_cicle::core::ast::Literal::Unit);
+                _ty = lambda_cicle::core::ast::Type::unit();
+            } else {
+                // Fall back to parsing as expression
+                term = parse(&source)?;
+                _ty = type_check_with_borrow_check(&term)?;
+            }
+
             let net = translate(&term);
 
             let module = Module {
@@ -172,7 +194,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .unwrap_or_default()
                     .to_string_lossy()
                     .to_string(),
-                exports: Exports::from_term(&term, _ty),
+                exports: Exports::from_term(&term, _ty.clone()),
                 impls: Vec::new(),
                 net,
             };

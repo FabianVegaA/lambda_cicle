@@ -1,0 +1,72 @@
+-- Std.Prelude - Auto-imported prelude
+-- Layer 0 (no dependencies)
+
+-- Types and Constructors (§16.2)
+pub type Bool (..)
+pub type Unit (..)
+pub type Option a (..)
+pub type Result a e (..)
+pub type Ordering (..)
+pub type DivisionByZero (..)
+
+-- Traits
+pub trait Eq a where {}
+pub trait Ord a where {}
+pub trait Hash a where {}
+pub trait Clone a where {}
+pub trait Copy a where {}
+pub trait Drop a where {}
+pub trait Sized a where {}
+pub trait Add a where {}
+pub trait Sub a where {}
+pub trait Mul a where {}
+pub trait Div a where {}
+pub trait Rem a where {}
+pub trait Neg a where {}
+
+-- Native Type Implementations
+impl Int : Eq where {}
+impl Int : Ord where {}
+impl Int : Hash where {}
+impl Int : Clone where {}
+impl Int : Copy where {}
+impl Int : Add where {}
+impl Int : Sub where {}
+impl Int : Mul where {}
+impl Int : Div where {}
+impl Int : Rem where {}
+impl Int : Neg where {}
+
+impl Float : Eq where {}
+impl Float : Ord where {}
+impl Float : Clone where {}
+impl Float : Copy where {}
+impl Float : Add where {}
+impl Float : Sub where {}
+impl Float : Mul where {}
+impl Float : Div where {}
+impl Float : Rem where {}
+impl Float : Neg where {}
+
+impl Bool : Eq where {}
+impl Bool : Ord where {}
+impl Bool : Hash where {}
+impl Bool : Clone where {}
+impl Bool : Copy where {}
+
+impl Char : Eq where {}
+impl Char : Ord where {}
+impl Char : Hash where {}
+impl Char : Clone where {}
+impl Char : Copy where {}
+
+impl Unit : Eq where {}
+impl Unit : Ord where {}
+impl Unit : Hash where {}
+impl Unit : Clone where {}
+impl Unit : Copy where {}
+
+impl Ordering : Eq where {}
+impl Ordering : Ord where {}
+impl Ordering : Clone where {}
+impl Ordering : Copy where {}

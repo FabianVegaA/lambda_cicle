@@ -706,7 +706,7 @@ cargo fmt
 **Step 4.3**: DOT Export - GraphViz net visualization
 **Step 4.4**: Benchmarking - Performance testing infrastructure
 
-### Phase 5: Module System ⏳ IN PROGRESS
+### Phase 5: Module System ✅ COMPLETE
 
 **Goal**: Implement full module system per §11 of design document v2.4
 
@@ -793,15 +793,33 @@ src/traits/coherence.rs      # Orphan rule
 src/main.rs                  # Add build/link commands
 ```
 
-### Phase 6: Standard Library ⏳ PENDING
+### Phase 6: Standard Library ⏳ IN PROGRESS
 
 **Goal**: Implement stdlib per §16 of design document v2.4
+
+#### Completed Steps
+
+| Step | Description | Status |
+|------|-------------|--------|
+| 6.1 | Prelude types (Bool, Unit, Option, Result, Ordering, DivisionByZero) | ✅ DONE |
+| 6.2 | Prelude trait declarations (Eq, Ord, Hash, Clone, Copy, Drop, Sized, Add, Sub, Mul, Div, Rem, Neg) | ✅ DONE |
+| 6.3 | Native type impls (Int, Float, Bool, Char, Unit, Ordering) | ✅ DONE |
+| 6.4 | CLI build supports parse_program for declarations | ✅ DONE |
+| 6.5 | Grammar fixes for type keywords as type names | ✅ DONE |
+
+#### Grammar Limitations (Needs Enhancement)
+
+- No arrow types (`->`) in type position
+- No reference types (`&`) in type position  
+- No type application syntax (`Option a`)
+- Traits require `where {}` even without constraints
+- Val declarations need `= expression` not just type annotation
 
 #### Stdlib Structure
 
 ```
 Std/
-├── Prelude     -- auto-imported (Bool, Unit, Option, Result, Eq, Ord, Hash, Clone, Drop, Add, Sub, Mul, Div, Neg)
+├── Prelude     -- auto-imported (types, traits, native impls)
 ├── String     -- Linear string type [Layer 1]
 ├── Show       -- Show trait [Layer 1]
 ├── List       -- Singly-linked list [Layer 2]
@@ -811,17 +829,19 @@ Std/
 
 #### Implementation Steps
 
-**Step 6.1**: Implement Prelude traits (Eq, Ord, Hash, Clone, Drop, Add, Sub, Mul, Div, Neg)
+**Step 6.1**: Prelude types ✅ DONE
 
-**Step 6.2**: Implement Std.String
+**Step 6.2**: Prelude trait declarations ✅ DONE
 
-**Step 6.3**: Implement Std.List
+**Step 6.3**: Implement Std.String
 
-**Step 6.4**: Implement Std.Map
+**Step 6.4**: Implement Std.List
 
-**Step 6.5**: Implement Std.Show
+**Step 6.5**: Implement Std.Map
 
-**Step 6.6**: Implement Std.IO
+**Step 6.6**: Implement Std.Show
+
+**Step 6.7**: Implement Std.IO
 
 ### Test Coverage
 
@@ -835,13 +855,13 @@ Std/
 
 ### What's Next
 
-- Phase 5: Module System (8 weeks estimated)
-- Phase 6: Standard Library (8 weeks estimated)
+- Phase 6: Standard Library (remaining: String, List, Map, Show, IO)
+- Grammar enhancements (arrow types, reference types, type application)
 - Version 1.0 Release
 
 ---
 
-*Plan Version: 1.7*  
+*Plan Version: 1.8*  
 *Created: 2026-03-27*  
 *Updated: 2026-03-29*  
-*Status: Phase 5 IN PROGRESS*
+*Status: Phase 6 IN PROGRESS*

@@ -532,6 +532,26 @@ impl<'a> Parser<'a> {
                 self.advance();
                 Ok(name)
             }
+            Some(Token::TyInt) => {
+                self.advance();
+                Ok("Int".to_string())
+            }
+            Some(Token::TyFloat) => {
+                self.advance();
+                Ok("Float".to_string())
+            }
+            Some(Token::TyBool) => {
+                self.advance();
+                Ok("Bool".to_string())
+            }
+            Some(Token::TyChar) => {
+                self.advance();
+                Ok("Char".to_string())
+            }
+            Some(Token::KwUnit) => {
+                self.advance();
+                Ok("Unit".to_string())
+            }
             Some(token) => Err(ParseError::ExpectedToken {
                 expected: "identifier".to_string(),
                 found: format!("{:?}", token),
