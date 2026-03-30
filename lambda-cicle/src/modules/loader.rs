@@ -1,6 +1,7 @@
 use super::{Exports, Module, ModuleError};
+use crate::core::ast::Decl;
 use crate::traits::Implementation;
-use crate::{parse, translate, type_check_with_borrow_check, Term};
+use crate::{parse, parse_program, translate, type_check_with_borrow_check, Term};
 use std::path::Path;
 
 pub fn parse_module_file(path: &Path) -> Result<Term, ModuleError> {
@@ -10,6 +11,58 @@ pub fn parse_module_file(path: &Path) -> Result<Term, ModuleError> {
 
     let term = parse(&source)?;
     Ok(term)
+}
+
+pub fn parse_module_decls(path: &Path) -> Result<Vec<Decl>, ModuleError> {
+    let source = std::fs::read_to_string(path).map_err(|e| ModuleError {
+        message: format!("Failed to read file: {}", e),
+    })?;
+
+    let decls = parse_program(&source)?;
+    Ok(decls)
+}
+
+pub fn module_name_from_path(path: &Path) -> String {
+    let mut components = Vec::new();
+
+    if let Some(parent) = path.parent() {
+        for part in parent.iter() {
+            if let Some(s) = part.to_str() {
+                if s != "src" && s != "." {
+                    components.push(s);
+                }
+            }
+        }
+    }
+
+    if let Some(stem) = path.file_stem() {
+        if let Some(s) = stem.to_str() {
+            components.push(s);
+        }
+    }
+
+    if components.is_empty() {
+        "Main".to_string()
+    } else {
+        components.join(".")
+    }
+}
+
+pub fn validate_module_name(path: &Path, expected_name: &str) -> Result<(), ModuleError> {
+    let actual_name = module_name_from_path(path);
+
+    if actual_name != expected_name {
+        return Err(ModuleError {
+            message: format!(
+                "Module name mismatch: file '{}' defines module '{}' but expected '{}'",
+                path.display(),
+                actual_name,
+                expected_name
+            ),
+        });
+    }
+
+    Ok(())
 }
 
 pub fn compile_module(name: String, term: Term) -> Result<Module, ModuleError> {
@@ -26,6 +79,23 @@ pub fn compile_module(name: String, term: Term) -> Result<Module, ModuleError> {
         exports,
         impls,
         net,
+    })
+}
+
+pub fn compile_module_with_decls(
+    path: &Path,
+    name: String,
+    decls: Vec<Decl>,
+) -> Result<Module, ModuleError> {
+    validate_module_name(path, &name)?;
+
+    let exports = Exports::from_decl(&decls);
+
+    Ok(Module {
+        name,
+        exports,
+        impls: Vec::new(),
+        net: crate::runtime::net::Net::new(),
     })
 }
 

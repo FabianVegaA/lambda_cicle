@@ -212,3 +212,57 @@ fn test_parse_no_prelude() {
     assert_eq!(decls.len(), 1);
     assert!(matches!(decls[0], Decl::NoPrelude));
 }
+
+#[test]
+fn test_exports_from_decl_filters_private() {
+    let result = parse_program("val x : Int = 42");
+    assert!(result.is_ok());
+    let decls = result.unwrap();
+
+    let exports = lambda_cicle::modules::Exports::from_decl(&decls);
+
+    // Private val should not be in public exports
+    assert!(exports.public_values().next().is_none());
+}
+
+#[test]
+fn test_exports_from_decl_includes_public() {
+    let result = parse_program("pub val x : Int = 42");
+    assert!(result.is_ok());
+    let decls = result.unwrap();
+
+    let exports = lambda_cicle::modules::Exports::from_decl(&decls);
+
+    // Public val should be in exports
+    let public_vals: Vec<_> = exports.public_values().collect();
+    assert_eq!(public_vals.len(), 1);
+    assert_eq!(public_vals[0].0, "x");
+}
+
+#[test]
+fn test_exports_type_opaque() {
+    let result = parse_program("pub type Foo = Int");
+    assert!(result.is_ok());
+    let decls = result.unwrap();
+
+    let exports = lambda_cicle::modules::Exports::from_decl(&decls);
+
+    let public_types: Vec<_> = exports.public_types().collect();
+    assert_eq!(public_types.len(), 1);
+    assert_eq!(public_types[0].0, "Foo");
+    assert!(!public_types[0].1.transparent); // opaque
+}
+
+#[test]
+fn test_exports_type_transparent() {
+    let result = parse_program("pub type Bar(..)");
+    assert!(result.is_ok());
+    let decls = result.unwrap();
+
+    let exports = lambda_cicle::modules::Exports::from_decl(&decls);
+
+    let public_types: Vec<_> = exports.public_types().collect();
+    assert_eq!(public_types.len(), 1);
+    assert_eq!(public_types[0].0, "Bar");
+    assert!(public_types[0].1.transparent); // transparent
+}

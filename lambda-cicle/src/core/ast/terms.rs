@@ -55,12 +55,62 @@ pub enum Visibility {
     Public,
 }
 
+impl serde::Serialize for Visibility {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        match self {
+            Visibility::Private => serializer.serialize_str("private"),
+            Visibility::Public => serializer.serialize_str("public"),
+        }
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for Visibility {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        use serde::de::Unexpected;
+        let s = String::deserialize(deserializer)?;
+        match s.as_str() {
+            "private" => Ok(Visibility::Private),
+            "public" => Ok(Visibility::Public),
+            _ => Err(serde::de::Error::invalid_value(
+                Unexpected::Str(&s),
+                &"private or public",
+            )),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum UseMode {
     Qualified,
     Selective(Vec<String>),
     Unqualified,
     Aliased(String),
+}
+
+#[allow(dead_code)]
+impl serde::Serialize for UseMode {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str("UseMode")
+    }
+}
+
+#[allow(dead_code)]
+impl<'de> serde::Deserialize<'de> for UseMode {
+    fn deserialize<D>(_deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        Ok(UseMode::Qualified)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
