@@ -710,6 +710,13 @@ cargo fmt
 
 **Goal**: Implement full module system per §11 of design document v2.4
 
+#### Completed Steps
+
+| Step | Description | Status |
+|------|-------------|--------|
+| 5.1 | Parser extensions for module syntax | ✅ DONE |
+| 5.2 | Visibility & Export System | ⏳ Next |
+
 #### Current State (Already Implemented)
 
 | Component | Status |
@@ -721,6 +728,7 @@ cargo fmt
 | Coherence checker | ✅ Done |
 | Trait registry | ✅ Done |
 | Simple `.λo` format | ⚠️ Partial |
+| Parser module syntax | ✅ Done (Step 5.1) |
 
 #### What's Missing
 
