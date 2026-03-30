@@ -36,6 +36,12 @@ pub enum Token {
     Dot,
     DotDot,
     Equals,
+    EqEq,
+    Neq,
+    Lt,
+    Gt,
+    Le,
+    Ge,
     Arrow,
     Pipe,
     Underscore,
@@ -113,7 +119,39 @@ impl Lexer {
                 }
                 Some('=') => {
                     self.advance();
-                    tokens.push(Token::Equals);
+                    if self.peek() == Some('=') {
+                        self.advance();
+                        tokens.push(Token::EqEq);
+                    } else {
+                        tokens.push(Token::Equals);
+                    }
+                }
+                Some('!') => {
+                    self.advance();
+                    if self.peek() == Some('=') {
+                        self.advance();
+                        tokens.push(Token::Neq);
+                    } else {
+                        return Err(LexError::UnexpectedChar('!', self.line, self.col));
+                    }
+                }
+                Some('<') => {
+                    self.advance();
+                    if self.peek() == Some('=') {
+                        self.advance();
+                        tokens.push(Token::Le);
+                    } else {
+                        tokens.push(Token::Lt);
+                    }
+                }
+                Some('>') => {
+                    self.advance();
+                    if self.peek() == Some('=') {
+                        self.advance();
+                        tokens.push(Token::Ge);
+                    } else {
+                        tokens.push(Token::Gt);
+                    }
                 }
                 Some('|') => {
                     self.advance();

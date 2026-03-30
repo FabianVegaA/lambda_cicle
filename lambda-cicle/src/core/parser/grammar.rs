@@ -283,7 +283,38 @@ impl<'a> Parser<'a> {
     }
 
     fn term(&mut self) -> Result<Term, ParseError> {
-        self.add_expr()
+        self.cmp_expr()
+    }
+
+    fn cmp_expr(&mut self) -> Result<Term, ParseError> {
+        let mut left = self.add_expr()?;
+        while matches!(
+            self.peek(),
+            Some(Token::EqEq)
+                | Some(Token::Neq)
+                | Some(Token::Lt)
+                | Some(Token::Gt)
+                | Some(Token::Le)
+                | Some(Token::Ge)
+        ) {
+            let op = self.peek().cloned();
+            self.advance();
+            let right = self.add_expr()?;
+            let prim_op = match op {
+                Some(Token::EqEq) => PrimOp::Eq,
+                Some(Token::Neq) => PrimOp::Ne,
+                Some(Token::Lt) => PrimOp::Lt,
+                Some(Token::Gt) => PrimOp::Gt,
+                Some(Token::Le) => PrimOp::Le,
+                Some(Token::Ge) => PrimOp::Ge,
+                _ => unreachable!(),
+            };
+            left = Term::app(
+                Term::app(Term::NativeLiteral(Literal::Prim(prim_op)), left),
+                right,
+            );
+        }
+        Ok(left)
     }
 
     fn add_expr(&mut self) -> Result<Term, ParseError> {

@@ -1,6 +1,7 @@
 use crate::core::ast::types::Multiplicity;
 use crate::core::ast::{Arm, Literal, Pattern, Term};
 use crate::runtime::net::{Agent, Net, Node, NodeId, Port, PortIndex, Wire};
+use crate::runtime::PrimOp;
 
 pub struct NetBuilder {
     net: Net,
@@ -172,10 +173,22 @@ impl NetBuilder {
     }
 
     fn translate_literal(&mut self, lit: &Literal) -> NodeId {
-        let node = Node::constructor(format!("{}", lit), 1);
-        let id = self.net.add_node(node);
-        self.net.add_free_port(id, PortIndex(0));
-        id
+        match lit {
+            Literal::Prim(op) => {
+                let node = Node::prim(op.clone());
+                let id = self.net.add_node(node);
+                self.net.add_free_port(id, PortIndex(0));
+                self.net.add_free_port(id, PortIndex(1));
+                self.net.add_free_port(id, PortIndex(2));
+                id
+            }
+            _ => {
+                let node = Node::constructor(format!("{}", lit), 1);
+                let id = self.net.add_node(node);
+                self.net.add_free_port(id, PortIndex(0));
+                id
+            }
+        }
     }
 
     fn connect_ports(
