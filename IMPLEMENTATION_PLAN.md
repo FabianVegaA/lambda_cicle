@@ -717,7 +717,8 @@ cargo fmt
 | 5.1 | Parser extensions for module syntax | ✅ DONE |
 | 5.2 | Visibility & Export System | ✅ DONE |
 | 5.3 | Import Resolution | ✅ DONE |
-| 5.4 | Orphan Rule Enforcement | ⏳ Next |
+| 5.4 | Orphan Rule Enforcement | ✅ DONE |
+| 5.5 | Full .λo Format | ⏳ Next |
 
 #### Current State (Already Implemented)
 
