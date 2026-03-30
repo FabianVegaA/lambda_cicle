@@ -5,6 +5,7 @@ pub mod tools;
 pub mod traits;
 
 pub use core::ast::{Decl, Pattern, Term, Type, Visibility};
+pub use core::name_resolver::{self, NameResolutionError};
 pub use core::parser::{parse, parse_program, ParseError};
 pub use core::typecheck::{type_check_with_borrow_check, TypeError};
 pub use modules::{link, load_module, Exports, Module, ModuleError};
