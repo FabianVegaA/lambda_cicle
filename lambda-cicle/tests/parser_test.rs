@@ -1,5 +1,5 @@
-use lambda_cicle::core::ast::{Literal, Term};
-use lambda_cicle::parse;
+use lambda_cicle::core::ast::{Decl, Literal, Term, Visibility};
+use lambda_cicle::{parse, parse_program};
 
 #[test]
 fn test_parse_int_literal() {
@@ -94,4 +94,121 @@ fn test_parse_unit() {
         Term::NativeLiteral(Literal::Unit) => (),
         _ => panic!("Expected unit literal, got {:?}", term),
     }
+}
+
+#[test]
+fn test_parse_type_decl_opaque() {
+    let result = parse_program("pub type Foo = Int");
+    assert!(result.is_ok(), "Type decl should parse: {:?}", result);
+    let decls = result.unwrap();
+    assert_eq!(decls.len(), 1);
+    match &decls[0] {
+        Decl::TypeDecl {
+            name,
+            visibility,
+            transparent,
+            ..
+        } => {
+            assert_eq!(name, "Foo");
+            assert!(matches!(visibility, Visibility::Public));
+            assert!(!*transparent);
+        }
+        _ => panic!("Expected type declaration"),
+    }
+}
+
+#[test]
+fn test_parse_type_decl_transparent() {
+    let result = parse_program("pub type Foo(..)");
+    assert!(
+        result.is_ok(),
+        "Transparent type should parse: {:?}",
+        result
+    );
+    let decls = result.unwrap();
+    assert_eq!(decls.len(), 1);
+    match &decls[0] {
+        Decl::TypeDecl {
+            name, transparent, ..
+        } => {
+            assert_eq!(name, "Foo");
+            assert!(*transparent);
+        }
+        _ => panic!("Expected type declaration"),
+    }
+}
+
+#[test]
+fn test_parse_val_decl() {
+    let result = parse_program("pub val x : Int = 42");
+    assert!(result.is_ok(), "Val decl should parse: {:?}", result);
+    let decls = result.unwrap();
+    assert_eq!(decls.len(), 1);
+    match &decls[0] {
+        Decl::ValDecl {
+            name, visibility, ..
+        } => {
+            assert_eq!(name, "x");
+            assert!(matches!(visibility, Visibility::Public));
+        }
+        _ => panic!("Expected val declaration"),
+    }
+}
+
+#[test]
+fn test_parse_val_decl_private() {
+    let result = parse_program("val x : Int = 42");
+    assert!(
+        result.is_ok(),
+        "Private val decl should parse: {:?}",
+        result
+    );
+    let decls = result.unwrap();
+    match &decls[0] {
+        Decl::ValDecl { visibility, .. } => {
+            assert!(matches!(visibility, Visibility::Private));
+        }
+        _ => panic!("Expected val declaration"),
+    }
+}
+
+#[test]
+fn test_parse_use_qualified() {
+    let result = parse_program("use Std.List");
+    assert!(result.is_ok(), "Use qualified should parse: {:?}", result);
+    let decls = result.unwrap();
+    assert_eq!(decls.len(), 1);
+    match &decls[0] {
+        Decl::UseDecl { path, .. } => {
+            assert_eq!(path, &vec!["Std".to_string(), "List".to_string()]);
+        }
+        _ => panic!("Expected use declaration"),
+    }
+}
+
+#[test]
+fn test_parse_use_selective() {
+    let result = parse_program("use Std.List (map, filter)");
+    assert!(result.is_ok(), "Use selective should parse: {:?}", result);
+    let decls = result.unwrap();
+    match &decls[0] {
+        Decl::UseDecl { path, mode } => {
+            assert_eq!(path, &vec!["Std".to_string(), "List".to_string()]);
+            if let lambda_cicle::core::ast::UseMode::Selective(items) = mode {
+                assert_eq!(items, &vec!["map".to_string(), "filter".to_string()]);
+            } else {
+                panic!("Expected selective mode");
+            }
+        }
+        _ => panic!("Expected use declaration"),
+    }
+}
+
+#[test]
+fn test_parse_no_prelude() {
+    let result = parse_program("no_prelude");
+    assert!(result.is_ok(), "no_prelude should parse: {:?}", result);
+    let decls = result.unwrap();
+    assert_eq!(decls.len(), 1);
+    assert!(matches!(decls[0], Decl::NoPrelude));
 }

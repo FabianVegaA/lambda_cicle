@@ -1,5 +1,8 @@
 use super::lexer::Token;
-use crate::core::ast::{Arm, Literal, Multiplicity, Pattern, Term, Type};
+use crate::core::ast::{
+    Arm, Decl, Literal, MethodDef, MethodName, MethodSig, Multiplicity, Pattern, Term, TraitName,
+    Type, UseMode, Visibility,
+};
 
 pub struct Parser<'a> {
     tokens: &'a [Token],
@@ -15,6 +18,230 @@ impl<'a> Parser<'a> {
         let result = self.term()?;
         self.consume(&Token::EOF)?;
         Ok(result)
+    }
+
+    pub fn parse_program(&mut self) -> Result<Vec<Decl>, ParseError> {
+        let mut decls = Vec::new();
+        while !self.is_at_end() {
+            match self.peek() {
+                Some(&Token::EOF) => break,
+                _ => {
+                    let decl = self.decl()?;
+                    decls.push(decl);
+                }
+            }
+        }
+        if !self.is_at_end() {
+            self.consume(&Token::EOF)?;
+        }
+        Ok(decls)
+    }
+
+    fn decl(&mut self) -> Result<Decl, ParseError> {
+        match self.peek() {
+            Some(&Token::KwNoPrelude) => {
+                self.advance();
+                Ok(Decl::NoPrelude)
+            }
+            Some(&Token::KwType) => self.type_decl(None),
+            Some(&Token::KwVal) => self.val_decl(None),
+            Some(&Token::KwTrait) => self.trait_decl(None),
+            Some(&Token::KwImpl) => self.impl_decl(),
+            Some(&Token::KwUse) => self.use_decl(),
+            Some(&Token::KwPub) => {
+                self.advance();
+                match self.peek() {
+                    Some(&Token::KwType) => self.type_decl(Some(Visibility::Public)),
+                    Some(&Token::KwVal) => self.val_decl(Some(Visibility::Public)),
+                    Some(&Token::KwTrait) => self.trait_decl(Some(Visibility::Public)),
+                    _ => Err(ParseError::UnexpectedToken(format!(
+                        "expected declaration after pub, found {:?}",
+                        self.peek()
+                    ))),
+                }
+            }
+            _ => {
+                let term = self.term()?;
+                Ok(Decl::ValDecl {
+                    visibility: Visibility::Private,
+                    name: "main".to_string(),
+                    ty: term.get_type().unwrap_or(Type::unit()),
+                    term: Box::new(term),
+                })
+            }
+        }
+    }
+
+    fn type_decl(&mut self, visibility_override: Option<Visibility>) -> Result<Decl, ParseError> {
+        let visibility = visibility_override
+            .unwrap_or_else(|| self.parse_visibility().unwrap_or(Visibility::Private));
+        self.consume(&Token::KwType)?;
+        let name = self.expect_ident()?;
+        let params = self.parse_type_params()?;
+
+        let (ty, transparent) = match self.peek() {
+            Some(&Token::LParen) => {
+                self.advance();
+                match self.peek() {
+                    Some(&Token::DotDot) => {
+                        self.advance();
+                        self.consume(&Token::RParen)?;
+                        (Type::unit(), true)
+                    }
+                    _ => return Err(ParseError::UnexpectedToken("expected ..".to_string())),
+                }
+            }
+            _ => {
+                self.consume(&Token::Equals)?;
+                let ty = self.ty()?;
+                (ty, false)
+            }
+        };
+
+        Ok(Decl::TypeDecl {
+            visibility,
+            name,
+            params,
+            ty,
+            transparent,
+        })
+    }
+
+    fn val_decl(&mut self, visibility_override: Option<Visibility>) -> Result<Decl, ParseError> {
+        let visibility = visibility_override
+            .unwrap_or_else(|| self.parse_visibility().unwrap_or(Visibility::Private));
+        self.consume(&Token::KwVal)?;
+        let name = self.expect_ident()?;
+        self.consume(&Token::Colon)?;
+        let ty = self.ty()?;
+        self.consume(&Token::Equals)?;
+        let term = Box::new(self.term()?);
+        Ok(Decl::ValDecl {
+            visibility,
+            name,
+            ty,
+            term,
+        })
+    }
+
+    fn trait_decl(&mut self, visibility_override: Option<Visibility>) -> Result<Decl, ParseError> {
+        let visibility = visibility_override
+            .unwrap_or_else(|| self.parse_visibility().unwrap_or(Visibility::Private));
+        self.consume(&Token::KwTrait)?;
+        let name = self.expect_ident()?;
+        let params = self.parse_type_params()?;
+        self.consume(&Token::KwWhere)?;
+        self.consume(&Token::LBrace)?;
+        let mut methods = Vec::new();
+        while !matches!(self.peek(), Some(&Token::RBrace)) {
+            let method_name_str = self.expect_ident()?;
+            self.consume(&Token::Colon)?;
+            let method_ty = self.ty()?;
+            methods.push(MethodSig {
+                name: MethodName(method_name_str),
+                ty: method_ty,
+            });
+            if matches!(self.peek(), Some(Token::RBrace)) {
+                break;
+            }
+        }
+        self.consume(&Token::RBrace)?;
+        Ok(Decl::TraitDecl {
+            visibility,
+            name,
+            params,
+            methods,
+        })
+    }
+
+    fn impl_decl(&mut self) -> Result<Decl, ParseError> {
+        self.consume(&Token::KwImpl)?;
+        let ty = self.ty()?;
+        self.consume(&Token::Colon)?;
+        let trait_name_str = self.expect_ident()?;
+        let trait_name = TraitName(trait_name_str);
+        self.consume(&Token::KwWhere)?;
+        self.consume(&Token::LBrace)?;
+        let mut methods = Vec::new();
+        while !matches!(self.peek(), Some(&Token::RBrace)) {
+            let method_name_str = self.expect_ident()?;
+            self.consume(&Token::Equals)?;
+            let term = Box::new(self.term()?);
+            methods.push(MethodDef {
+                name: MethodName(method_name_str),
+                term,
+            });
+            if matches!(self.peek(), Some(Token::RBrace)) {
+                break;
+            }
+        }
+        self.consume(&Token::RBrace)?;
+        Ok(Decl::ImplDecl {
+            ty,
+            trait_name,
+            methods,
+        })
+    }
+
+    fn use_decl(&mut self) -> Result<Decl, ParseError> {
+        self.consume(&Token::KwUse)?;
+        let path = self.parse_module_path()?;
+        let mode = match self.peek() {
+            Some(&Token::LParen) => {
+                self.advance();
+                match self.peek() {
+                    Some(&Token::DotDot) => {
+                        self.advance();
+                        self.consume(&Token::RParen)?;
+                        UseMode::Unqualified
+                    }
+                    _ => {
+                        let mut items = Vec::new();
+                        items.push(self.expect_ident()?);
+                        while matches!(self.peek(), Some(Token::Comma)) {
+                            self.advance();
+                            items.push(self.expect_ident()?);
+                        }
+                        self.consume(&Token::RParen)?;
+                        UseMode::Selective(items)
+                    }
+                }
+            }
+            Some(&Token::KwAs) => {
+                self.advance();
+                let alias = self.expect_ident()?;
+                UseMode::Aliased(alias)
+            }
+            _ => UseMode::Qualified,
+        };
+        Ok(Decl::UseDecl { path, mode })
+    }
+
+    fn parse_visibility(&mut self) -> Result<Visibility, ParseError> {
+        if matches!(self.peek(), Some(&Token::KwPub)) {
+            self.advance();
+            Ok(Visibility::Public)
+        } else {
+            Ok(Visibility::Private)
+        }
+    }
+
+    fn parse_type_params(&mut self) -> Result<Vec<String>, ParseError> {
+        let mut params = Vec::new();
+        while matches!(self.peek(), Some(&Token::Ident(_))) {
+            params.push(self.expect_ident()?);
+        }
+        Ok(params)
+    }
+
+    fn parse_module_path(&mut self) -> Result<Vec<String>, ParseError> {
+        let mut path = Vec::new();
+        path.push(self.expect_ident()?);
+        while matches!(self.peek(), Some(Token::Dot)) {
+            self.advance();
+            path.push(self.expect_ident()?);
+        }
+        Ok(path)
     }
 
     fn term(&mut self) -> Result<Term, ParseError> {
@@ -288,10 +515,29 @@ impl<'a> Parser<'a> {
         self.tokens.get(self.pos)
     }
 
+    fn is_at_end(&self) -> bool {
+        self.pos >= self.tokens.len()
+    }
+
     fn advance(&mut self) -> &Token {
         let tok = &self.tokens[self.pos];
         self.pos += 1;
         tok
+    }
+
+    fn expect_ident(&mut self) -> Result<String, ParseError> {
+        match self.peek() {
+            Some(Token::Ident(name)) => {
+                let name = name.clone();
+                self.advance();
+                Ok(name)
+            }
+            Some(token) => Err(ParseError::ExpectedToken {
+                expected: "identifier".to_string(),
+                found: format!("{:?}", token),
+            }),
+            None => Err(ParseError::UnexpectedEndOfInput),
+        }
     }
 
     fn consume(&mut self, expected: &Token) -> Result<(), ParseError> {

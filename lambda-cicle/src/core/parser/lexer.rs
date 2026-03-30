@@ -10,6 +10,15 @@ pub enum Token {
     KwForall,
     KwUnit,
     KwLambda,
+    KwPub,
+    KwUse,
+    KwType,
+    KwTrait,
+    KwImpl,
+    KwNoPrelude,
+    KwWhere,
+    KwVal,
+    KwAs,
     TyInt,
     TyFloat,
     TyBool,
@@ -25,6 +34,7 @@ pub enum Token {
     Colon,
     Comma,
     Dot,
+    DotDot,
     Equals,
     Arrow,
     Pipe,
@@ -89,7 +99,12 @@ impl Lexer {
                 }
                 Some('.') => {
                     self.advance();
-                    tokens.push(Token::Dot);
+                    if let Some('.') = self.peek() {
+                        self.advance();
+                        tokens.push(Token::DotDot);
+                    } else {
+                        tokens.push(Token::Dot);
+                    }
                 }
                 Some('=') => {
                     self.advance();
@@ -256,6 +271,17 @@ impl Lexer {
             "false" => Token::BoolLit(false),
             "forall" => Token::KwForall,
             "Unit" => Token::KwUnit,
+            "lambda" => Token::KwLambda,
+            "λ" => Token::KwLambda,
+            "pub" => Token::KwPub,
+            "use" => Token::KwUse,
+            "type" => Token::KwType,
+            "trait" => Token::KwTrait,
+            "impl" => Token::KwImpl,
+            "no_prelude" => Token::KwNoPrelude,
+            "where" => Token::KwWhere,
+            "val" => Token::KwVal,
+            "as" => Token::KwAs,
             "Int" => Token::TyInt,
             "Float" => Token::TyFloat,
             "Bool" => Token::TyBool,

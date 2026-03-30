@@ -50,6 +50,65 @@ impl Arm {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub enum Visibility {
+    Private,
+    Public,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum UseMode {
+    Qualified,
+    Selective(Vec<String>),
+    Unqualified,
+    Aliased(String),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Decl {
+    TypeDecl {
+        visibility: Visibility,
+        name: String,
+        params: Vec<String>,
+        ty: Type,
+        transparent: bool,
+    },
+    ValDecl {
+        visibility: Visibility,
+        name: String,
+        ty: Type,
+        term: Box<Term>,
+    },
+    TraitDecl {
+        visibility: Visibility,
+        name: String,
+        params: Vec<String>,
+        methods: Vec<MethodSig>,
+    },
+    ImplDecl {
+        ty: Type,
+        trait_name: TraitName,
+        methods: Vec<MethodDef>,
+    },
+    UseDecl {
+        path: Vec<String>,
+        mode: UseMode,
+    },
+    NoPrelude,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct MethodSig {
+    pub name: MethodName,
+    pub ty: Type,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct MethodDef {
+    pub name: MethodName,
+    pub term: Box<Term>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum Term {
     Var(String),
     Abs {
@@ -150,6 +209,36 @@ impl Term {
             trait_name,
             method,
             arg: Box::new(arg),
+        }
+    }
+
+    pub fn get_type(&self) -> Option<Type> {
+        match self {
+            Term::Var(_) => None,
+            Term::Abs { annot, body, .. } => Some(Type::arrow(
+                annot.clone(),
+                Multiplicity::One,
+                body.get_type().unwrap_or(Type::unit()),
+            )),
+            Term::App { fun, .. } => fun.get_type().and_then(|t| {
+                if let Type::Arrow(_, _, ret) = t {
+                    Some(*ret)
+                } else {
+                    None
+                }
+            }),
+            Term::Let { annot, body, .. } => {
+                let mut ty = annot.clone();
+                if let Some(body_type) = body.get_type() {
+                    ty = body_type;
+                }
+                Some(ty)
+            }
+            Term::Match { arms, .. } => arms.first().and_then(|a| a.body.get_type()),
+            Term::View { arms, .. } => arms.first().and_then(|a| a.body.get_type()),
+            Term::TraitMethod { .. } => None,
+            Term::Constructor(_, _) => None,
+            Term::NativeLiteral(lit) => Some(lit.ty()),
         }
     }
 }

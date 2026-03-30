@@ -1,7 +1,7 @@
 pub mod grammar;
 pub mod lexer;
 
-use crate::core::ast::Term;
+use crate::core::ast::{Decl, Term};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -24,5 +24,14 @@ pub fn parse(source: &str) -> Result<Term, ParseError> {
     let mut parser = grammar::Parser::new(&tokens);
     parser
         .parse()
+        .map_err(|e| ParseError::SyntaxError(e.to_string()))
+}
+
+pub fn parse_program(source: &str) -> Result<Vec<Decl>, ParseError> {
+    let mut lexer = lexer::Lexer::new(source);
+    let tokens = lexer.tokenize()?;
+    let mut parser = grammar::Parser::new(&tokens);
+    parser
+        .parse_program()
         .map_err(|e| ParseError::SyntaxError(e.to_string()))
 }
