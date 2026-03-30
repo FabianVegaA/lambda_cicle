@@ -718,7 +718,8 @@ cargo fmt
 | 5.2 | Visibility & Export System | ✅ DONE |
 | 5.3 | Import Resolution | ✅ DONE |
 | 5.4 | Orphan Rule Enforcement | ✅ DONE |
-| 5.5 | Full .λo Format | ⏳ Next |
+| 5.5 | Full .λo Format | ✅ DONE |
+| 5.6 | CLI Build Commands | ⏳ Next |
 
 #### Current State (Already Implemented)
 
