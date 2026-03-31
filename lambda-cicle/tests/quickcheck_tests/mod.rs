@@ -1,5 +1,6 @@
 pub mod context_test;
 pub mod eval_test;
+mod primitives_test;
 pub mod semiring_test;
 pub mod type_test;
 

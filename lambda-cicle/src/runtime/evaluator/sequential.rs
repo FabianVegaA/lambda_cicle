@@ -1,6 +1,7 @@
 use super::{EvalError, Evaluator};
 use crate::core::ast::{Literal, Term};
 use crate::runtime::net::{Agent, InteractionResult, Net, NodeId, PortIndex};
+use crate::runtime::primitives::PrimVal;
 
 pub struct SequentialEvaluator {
     max_steps: usize,
@@ -52,20 +53,34 @@ fn extract_result(net: &Net) -> Option<Term> {
     }
 
     for (node_id, node) in net.nodes().iter().enumerate() {
-        if let Agent::Constructor(name) = &node.agent {
-            if let Ok(n) = name.parse::<i64>() {
-                return Some(Term::NativeLiteral(Literal::Int(n)));
+        match &node.agent {
+            Agent::PrimVal(PrimVal::Int(n)) => {
+                return Some(Term::NativeLiteral(Literal::Int(*n)));
             }
-            if let Ok(b) = name.parse::<bool>() {
-                return Some(Term::NativeLiteral(Literal::Bool(b)));
+            Agent::PrimVal(PrimVal::Float(f)) => {
+                return Some(Term::NativeLiteral(Literal::Float(*f)));
             }
-            if name == "()" || name == "Unit" {
+            Agent::PrimVal(PrimVal::Bool(b)) => {
+                return Some(Term::NativeLiteral(Literal::Bool(*b)));
+            }
+            Agent::PrimVal(PrimVal::Char(c)) => {
+                return Some(Term::NativeLiteral(Literal::Char(*c)));
+            }
+            Agent::PrimVal(PrimVal::Unit) => {
                 return Some(Term::NativeLiteral(Literal::Unit));
             }
-        }
-
-        if let Agent::Prim(_) = &node.agent {
-            return Some(Term::NativeLiteral(Literal::Unit));
+            Agent::Constructor(name) => {
+                if let Ok(n) = name.parse::<i64>() {
+                    return Some(Term::NativeLiteral(Literal::Int(n)));
+                }
+                if let Ok(b) = name.parse::<bool>() {
+                    return Some(Term::NativeLiteral(Literal::Bool(b)));
+                }
+                if name == "()" || name == "Unit" {
+                    return Some(Term::NativeLiteral(Literal::Unit));
+                }
+            }
+            _ => {}
         }
     }
 

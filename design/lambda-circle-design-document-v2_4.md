@@ -148,19 +148,55 @@ the same composition is a **static type error**.
 
 #### 2.A.3 Types
 
-```
-type      ::= type_atom
-            | type_atom "->" type              -- function (right-associative)
+The type grammar is the core gap between the current parser and the full language. The
+productions are listed below with their implementation status. Productions marked ⚠️ are
+**Phase 5a prerequisites** — the module system and stdlib cannot be expressed without
+them.
 
-type_atom ::=
-    | "Unit"
-    | "Int"
-    | "Float"
-    | "Bool"
-    | "Char"
-    | identifier                               -- type name or type variable
-    | "(" type ")"                             -- grouping
 ```
+-- Top level: function arrow (right-associative)
+type      ::= type_app                                   -- ✅ implemented (atom only)
+            | type_app "->" type                         -- ⚠️ Phase 5a
+
+-- Type application: juxtaposition, left-associative
+-- mirrors app_expr at the term level
+type_app  ::= type_atom { type_atom }                   -- ⚠️ Phase 5a
+
+-- Atoms
+type_atom ::=
+    | "Unit"                                             -- ✅ implemented
+    | "Int"                                              -- ✅ implemented
+    | "Float"                                            -- ✅ implemented
+    | "Bool"                                             -- ✅ implemented
+    | "Char"                                             -- ✅ implemented
+    | upper_identifier                                   -- ⚠️ Phase 5a (type constructor)
+    | lower_identifier                                   -- ⚠️ Phase 5a (type variable)
+    | "&" type_atom                                      -- ⚠️ Phase 5a (borrow reference)
+    | "(" type ")"                                       -- ✅ implemented
+    | "(" type "," type ")"                              -- ⚠️ Phase 5a (product type)
+```
+
+**Naming convention** (functional language standard):
+- `lower_identifier` — begins with a lowercase letter or `_`: type variables (`a`, `b`,
+  `α`, `result`)
+- `upper_identifier` — begins with an uppercase letter: type constructors (`Option`,
+  `List`, `Bool`, `Map`)
+
+This convention is **enforced by the parser**, not just by style. An uppercase identifier
+in type position is always a constructor; a lowercase identifier is always a variable.
+This eliminates the ambiguity between `Option` (concrete type) and `a` (universally
+quantified variable) without requiring explicit `∀` syntax in the surface grammar.
+
+**Multiplicity on arrows.** The surface grammar uses bare `->` which the type checker
+interprets as `→^1` (linear) by default. This covers all stdlib signatures. Explicit
+multiplicity annotation on arrows (`→^ω`, `→^&`) remains in §2.B (theoretical calculus)
+only — it is not part of the surface syntax in v1.0. Multiplicity is declared on the
+**binder** (`λx:ω:τ`), not on the arrow.
+
+**`&` in type position** is a type prefix meaning "borrowed reference to", distinct from
+`&` as a multiplicity annotation in binder position. The parser distinguishes them by
+context: `&` followed by a type atom is always a reference type; `&` between `:` delimiters
+is always a multiplicity.
 
 #### 2.A.4 Patterns
 
@@ -175,39 +211,91 @@ and then using `view` for field access.
 
 #### 2.A.5 Module-Level Declarations
 
+All module-level declarations are **Phase 5a/5 prerequisites** — none are parsed by the
+current v1.0 parser. They are specified here as the normative target for implementation.
+
 ```
 decl ::=
-    | "pub"? "type" identifier type_param* "=" type      -- type definition
-    | "pub"? "type" identifier type_param* "(..)"        -- transparent export
-    | "pub"? "val" identifier ":" type "=" term          -- value binding
-    | "pub"? "trait" identifier type_param* "where"
-          "{" sig* "}"                                    -- trait definition
-    | "impl" type ":" identifier "where"
-          "{" val_def* "}"                                -- trait implementation
-    | "use" module_path                                   -- qualified import
-    | "use" module_path "(" identifier* ")"              -- selective unqualified
-    | "use" module_path "(..)"                           -- full unqualified (discouraged)
-    | "use" module_path "as" identifier                  -- aliased import
-    | "no_prelude"                                        -- suppress Std.Prelude auto-import
+    | "pub"? "type" upper_identifier type_param* "=" type      -- type definition
+    | "pub"? "type" upper_identifier type_param* "(..)"        -- transparent export
+    | "pub"? "val"  lower_identifier ":" type "=" term         -- value binding
+    | "pub"? "trait" upper_identifier type_param*
+          ( "where" upper_identifier type_param* )?            -- optional supertrait
+          "{" sig* "}"                                          -- trait definition
+    | "impl" upper_identifier "for" type
+          ( "where" constraint* )?
+          "{" val_def* "}"                                      -- trait implementation
+    | "use" module_path                                         -- qualified import
+    | "use" module_path "(" lower_identifier* ")"              -- selective unqualified
+    | "use" module_path "(..)"                                 -- full unqualified
+    | "use" module_path "as" upper_identifier                  -- aliased import
+    | "no_prelude"                                              -- suppress Std.Prelude
 
-type_param  ::= identifier
-module_path ::= identifier { "." identifier }
+-- Trait method signature (inside trait body)
+sig     ::= "val" lower_identifier ":" type
+
+-- Trait method implementation (inside impl body)
+val_def ::= "val" lower_identifier ":" type "=" term
+
+-- Type constraint (inside where clause)
+constraint ::= upper_identifier type
+
+-- Naming
+type_param  ::= lower_identifier
+module_path ::= upper_identifier { "." upper_identifier }
 ```
 
+**`impl C for T` vs `impl T : C`.** The surface grammar uses `impl Eq for Int` (trait
+first, type second), consistent with functional language conventions (Haskell, OCaml).
+The earlier stub used `impl T : C`; this is corrected here. The orphan rule (§8.4)
+applies: the impl must live in the module defining `Eq` or the module defining `Int`.
+
+**Constructor patterns in match** are a Phase 5a extension. The current parser handles
+only `_` and `lower_identifier` in pattern position. Constructor patterns
+(`upper_identifier pattern*`) require the type grammar extensions to be in place first,
+since the checker needs type information to validate exhaustiveness.
+
 #### 2.A.6 Concrete Examples
+
+**Terms (✅ implemented):**
 
 ```
 42                                    -- Int literal
 3.14                                  -- Float literal
 true                                  -- Bool literal
 Unit                                  -- Unit literal
-λx:1:Int.x                           -- identity function
+λx:1:Int.x                           -- identity function (linear)
+λx:ω:Int.x                           -- identity function (shared)
+λx:&:Int.x                           -- identity function (borrow)
 (λx:1:Int.x) 5                       -- application
 let x:1:Int = 5 in x                 -- let binding
 match x with { _ => x }              -- match (wildcard arm)
 match x with { _ => x | y => y }     -- match (two arms)
 add x y                              -- binary op as function application
 neg x                                -- unary op as function application
+```
+
+**Types (⚠️ Phase 5a — not yet parsed):**
+
+```
+Int -> Bool                          -- function type (arrow)
+Int -> Int -> Int                    -- curried binary function
+&Int -> Bool                         -- borrow reference in type position
+Option Int                           -- type application
+Result Int DivisionByZero            -- type application (two args)
+List (Option Int)                    -- nested type application
+(Int, Bool)                          -- product type
+```
+
+**Module declarations (⚠️ Phase 5a/5 — not yet parsed):**
+
+```
+pub val identity : Int -> Int = λx:1:Int.x
+pub type Option a (..)
+impl Eq for Int { val eq = λx:&:Int. λy:&:Int. prim_eq x y }
+use Std.List
+use Std.List (map, filter)
+use Std.List as L
 ```
 
 ---
@@ -339,14 +427,56 @@ where `Γ` is a context mapping variables to (multiplicity, type) pairs.
 
 ### 6.1 Agents
 
+The agent set is extended in v2.4 with two primitive agent classes to support the
+evaluation of built-in operations without a hybrid evaluator.
+
 | Agent | Arity | Purpose |
 |-------|-------|---------|
 | `λ` | 3-port | Lambda abstraction |
 | `@` | 3-port | Application |
 | `δ` | 3-port | Duplication (for `ω`) |
 | `ε` | 1-port | Erasure (for `0` and scope-end of `1`) |
+| `Prim(op)` | 2-port (unary) or 3-port (binary) | Primitive operation — compiler-internal only |
+| `PrimVal(type, value)` | 1-port | Typed primitive value (Int, Float, Bool, Char) |
+| `PrimIO(op)` | 3-port | IO primitive operation — compiler-internal only |
+| `IO_token` | 1-port | Linear sequencing token — threads through IO actions |
+
+**`PrimIO(op)` is 3-port**: principal port + `IO_token` port + argument port. It
+consumes the incoming `IO_token`, performs the side effect, and produces a fresh
+`IO_token` paired with the result. This port structure enforces sequencing: the next
+IO action cannot fire until the previous one has produced a fresh token.
+
+**`IO_token` is linear (`_1`).** It cannot be duplicated (δ-agent is forbidden on it)
+or silently erased (ε-agent is forbidden on it). The only agents that consume an
+`IO_token` are `PrimIO` agents. This guarantees IO actions are executed exactly once
+and in the order dictated by the `bind` chain. The token is created by the runtime at
+program entry and discarded only when `main` returns. They are emitted exclusively by
+the net translator when it encounters a `prim_*` intrinsic call (§6.4). No λ◦ source
+program can reference them directly. User code reaches primitive operations only through
+trait method wrappers defined in `Std.Prelude` (§16.2).
+
+**`PrimVal(type, value)` carries a typed payload:**
+- `PrimVal(Int, 42)`
+- `PrimVal(Float, 3.14)`
+- `PrimVal(Bool, true)`
+- `PrimVal(Char, 'a')`
+
+The type tag is redundant for correct programs (the type checker already guarantees
+well-typedness) but is retained for the trace debugger and for catching translator bugs
+at the agent boundary.
+
+**Arity by operation kind:**
+- Binary operations (`prim_iadd`, `prim_feq`, etc.) → `Prim(op)` is **3-port**:
+  principal port + two auxiliary ports for the two operands
+- Unary operations (`prim_ineg`, `prim_not`, etc.) → `Prim(op)` is **2-port**:
+  principal port + one auxiliary port
+
+This matches hardware arithmetic structure and avoids the overhead of two interaction
+rule firings per binary operation that a uniformly-curried 2-port design would require.
 
 ### 6.2 Interaction Rules
+
+**Structural rules** (unchanged from v2.3):
 
 | Rule | Fires When | Effect |
 |------|------------|--------|
@@ -356,12 +486,76 @@ where `Γ` is a context mapping variables to (multiplicity, type) pairs.
 | `δ ⋈ δ` | Two δs meet | Commute |
 | `δ ⋈ ε` | δ meets ε | Erase both branches |
 
+**Primitive rules** (new in v2.4):
+
+| Rule | Fires When | Effect |
+|------|------------|--------|
+| `Prim(bin_op) ⋈ PrimVal(t, v₁) ⋈ PrimVal(t, v₂)` | Binary op meets two typed values | Compute result → `PrimVal(t, result)` |
+| `Prim(un_op) ⋈ PrimVal(t, v)` | Unary op meets typed value | Compute result → `PrimVal(t', result)` |
+| `PrimVal ⋈ ε` | Any PrimVal meets ε | Erase value — no hook needed |
+| `PrimVal ⋈ δ` | Any PrimVal meets δ | Duplicate value — `Copy` is always satisfied for primitives |
+
+**IO rules** (new in v2.4):
+
+| Rule | Fires When | Effect |
+|------|------------|--------|
+| `PrimIO(op) ⋈ IO_token ⋈ arg` | IO op meets token and argument | Execute side effect; produce `(IO_token_new, result)` |
+| `PrimIO(op) ⋈ IO_token` | IO op with no argument (e.g. `read_line`) | Execute side effect; produce `(IO_token_new, result)` |
+
+**`IO_token` cannot interact with `ε` or `δ`.** Attempting to erase or duplicate an
+`IO_token` is a `LinearityViolation` caught at Gate 3. This is enforced by the type
+system: `IO_token` does not implement `Drop` or `Clone`.
+
+The evaluator loop is **uniform**: it scans for all active pairs (principal-port
+connections between any two agents) and fires the appropriate rule. There is no
+separate "primitive evaluation mode" — `Prim ⋈ PrimVal` is handled identically to
+`λ ⋈ @`. This eliminates the hybrid evaluator from the implementation entirely.
+
+**Type mismatch at a primitive rule** (e.g. `Prim(IAdd) ⋈ PrimVal(Bool, true)`) is
+a translator bug, not a runtime error. The type checker guarantees this cannot happen
+in a well-typed program. The evaluator may assert-fail in debug builds.
+
 ### 6.3 Translation Policy
 
 - `_1` bindings → direct connection
 - `_ω` bindings → insert δ-agent
 - `_0` bindings → insert ε-agent
 - `_&` bindings → observe-only (no agent)
+
+### 6.4 Primitive Translation
+
+When the net translator encounters a `prim_*` intrinsic applied to arguments, it emits
+`Prim` and `PrimVal` agents directly rather than going through the λ/@ encoding. This
+is the only point where the translator deviates from the standard term-to-net mapping.
+
+**Translation of a literal:**
+```
+translate(42 : Int)  →  PrimVal(Int, 42)
+translate(true)      →  PrimVal(Bool, true)
+```
+
+**Translation of a primitive application:**
+```
+translate(prim_iadd x y)
+  →  Prim(IAdd) with aux1 wired to translate(x)
+                     aux2 wired to translate(y)
+```
+
+**Translation of a prelude wrapper** (how user code reaches primitives):
+```
+-- Prelude source:
+val add : Int -> Int -> Int = λx:1:Int. λy:1:Int. prim_iadd x y
+
+-- Net translation: the λ/@ encoding wraps the Prim(IAdd) node.
+-- After β-reduction of (add 3 5), the net contains:
+--   Prim(IAdd) ⋈ PrimVal(Int, 3) ⋈ PrimVal(Int, 5)
+-- which fires immediately to:
+--   PrimVal(Int, 8)
+```
+
+The wrapper cost (two β-reductions to unwrap `add`) is paid once per call site. The
+actual primitive computation fires in a single interaction rule. For `ω`-shared
+functions the δ-agent duplicates the wrapper graph, not the result.
 
 ---
 
@@ -488,8 +682,12 @@ neg x        -- not: -x
 eq x y       -- not: x == y
 ```
 
-This keeps the grammar minimal (§2.A) and the semantics uniform: every operation is
-a named function with a type, a multiplicity, and a trait that governs it.
+At the **net level**, each trait method wrapper delegates to a `prim_*` compiler
+intrinsic (§16.3), which the net translator converts into a `Prim(op)` agent (§6.1).
+The evaluator reduces `Prim(op) ⋈ PrimVal` pairs by the primitive interaction rules
+(§6.2) — no hybrid evaluation mode is needed. From the user's perspective every
+operation is a named function; from the evaluator's perspective every operation is an
+interaction rule.
 
 ### 9.3 Notes
 
@@ -524,6 +722,7 @@ All errors are **static compile-time errors**:
 | `NonExhaustivePattern` | Gate 4 | Match does not cover all constructors |
 | `BorrowInMatchArm` | Gate 4 | Borrow mode used inside match arm |
 | `S5PrimeViolation` | Gate 5 / L3 | Net fails S5′ safety check |
+| `UnknownPrimitive` | Gate 5 | `prim_*` name not in the closed intrinsics table (§16.3) |
 | `CoherenceViolation` | L2 | Two modules define impl for same (trait, type) pair |
 | `SerializationError` | Gate 6 | `.λo` serialization failure |
 
@@ -707,8 +906,23 @@ isolation.
 | 2 | Interaction Net Runtime | 5 months | ✅ Complete |
 | 3 | Trait System + Modules | 2 months | ✅ Complete |
 | 4 | Tooling | Ongoing | ✅ Complete |
-| 5 | Module System (v2.4 spec) | 6 weeks | ⏳ Next |
-| 6 | Standard Library (v2.4 spec) | 8 weeks | ⏳ Next |
+| 5a | Grammar Extensions (prerequisite) | 2 weeks | ⏳ Next |
+| 5 | Module System (v2.4 spec) | 6 weeks | ⏳ Blocked on 5a |
+| 6 | Standard Library (v2.4 spec) | 8 weeks | ⏳ Blocked on 5 |
+
+**Phase 5a — Grammar Extensions** is a hard prerequisite for everything that follows.
+Without it, no module declaration, no trait definition, and no stdlib signature can be
+parsed. It covers exactly the five gaps identified in the grammar analysis:
+
+| Extension | Production | Unblocks |
+|-----------|------------|---------|
+| Naming convention | `upper_identifier`, `lower_identifier` | Type variables vs constructors |
+| Type variables | `lower_identifier` in `type_atom` | `Option a`, `List a`, `Result a e` |
+| Type application | `type_app ::= type_atom { type_atom }` | `Option Int`, `List Char` |
+| Reference in type position | `"&" type_atom` in `type_atom` | `&Int -> Bool`, trait signatures |
+| Arrow types | `type_app "->" type` in `type` | All function signatures |
+| `impl C for T` syntax | See §2.A.5 | Trait implementations |
+| Constructor patterns | `upper_identifier pattern*` in `pattern` | Exhaustiveness checking |
 
 **Phase 5** implements the full module system from §11: file-to-module mapping, `pub`
 visibility, import forms, orphan rule enforcement at Gate 3, `.λo` format with five
@@ -753,15 +967,36 @@ compiled through the same pipeline as user code.
 23. ✅ **Ops as trait methods** — binary/unary ops removed from grammar; defined as `Add`, `Sub`, `Mul`, `Div`, `Rem`, `Neg` trait impls in prelude
 24. ✅ **Div/Rem totality** — `div` and `rem` return `Result α DivisionByZero`; no runtime panic
 25. ✅ **Boolean logic** — `not`, `and`, `or` are strict prelude functions; short-circuit deferred to v2.0
-26. ✅ **Constructor patterns** — deferred to future version; current parser only handles wildcard and variable patterns
+26. ✅ **Constructor patterns** — deferred to Phase 5a; current parser handles `_` and identifier only
+27. ✅ **Naming convention** — lowercase = type variable, uppercase = type constructor; enforced by parser
+28. ✅ **Type application syntax** — `type_app ::= type_atom { type_atom }` mirroring term-level juxtaposition
+29. ✅ **`&` in type position** — parsed as reference type prefix; distinguished from multiplicity `&` by context
+30. ✅ **`impl C for T` syntax** — trait-first ordering; consistent with functional language conventions
+31. ✅ **Grammar extensions as Phase 5a** — identified as hard prerequisite; Phases 5 and 6 blocked on it
+32. ✅ **Primitive evaluation model** — Options A+C: `Prim(op)` and `PrimVal` agents in the net (A); user code reaches them only through `prim_*` intrinsic wrappers in the prelude (C)
+33. ✅ **PrimVal payload** — typed: `PrimVal(Int, 42)` — redundant for correct programs but required for debugging and translator validation
+34. ✅ **Prim agent arity** — fixed per operation: 3-port for binary ops, 2-port for unary ops; matches hardware structure, avoids double-firing overhead
+35. ✅ **Intrinsics set** — 30 intrinsics, closed and final for v1.0; any `prim_*` name not in the table is `UnknownPrimitive` at Gate 5
+36. ✅ **Hybrid evaluator eliminated** — uniform evaluator loop handles `Prim ⋈ PrimVal` rules identically to `λ ⋈ @`; no special arithmetic evaluation mode
+37. ✅ **IO is a monad** — `IO a` describes an effectful computation; no capability threading in user code
+38. ✅ **IO location** — `IO` type + `Monad IO` instance + all operations in `Std.IO`; orphan rule satisfied
+39. ✅ **Monad trait hierarchy** — full `Functor → Applicative → Monad` in prelude; `Option` and `Result` get monad instances for free
+40. ✅ **IO sequencing** — internal `IO_token` linear agent threads through `PrimIO` rules; sequencing enforced by data dependency in the net, not by a scheduler
+41. ✅ **`do`-notation** — deferred to v1.1; v1.0 uses explicit `bind` and `then`
+42. ✅ **File linearity** — `File` is linear; `close` is the only consumer; forgetting to close is a compile-time `LinearityViolation`
 
+### Open (deferred to v2.0)
 - **FFI** — Interfacing with native code
 - **Dynamic module loading** — Plugin system
 - **Versioning** — Disambiguating two versions of the same module
 - **Templated nets** — Named-port `.λo` format for zero-duplication linking
 - **Mutable maps / arrays** — Requires allocator design and `&`-mutation semantics
+- **Short-circuit `and`/`or`** — Requires lazy semantics not available in interaction nets
 - **Error message quality** — Detail level for type errors
 - **Debug format** — DWARF-compatible debug info
+
+### Open (deferred to v1.1)
+- **`do`-notation** — Syntactic sugar for nested `bind`/`then` chains
 
 ---
 
@@ -785,6 +1020,15 @@ compiled through the same pipeline as user code.
 | Ops are trait methods, not syntax | Keeps the grammar minimal; ops are functions with types and multiplicities |
 | Div returns Result | Division by zero is a total function; no runtime panics from the type system |
 | and/or are strict | Short-circuit requires lazy semantics not available in interaction nets (v1.0) |
+| Prim agents in the net (Option A+C) | Uniform evaluator loop; no hybrid evaluation mode; net is the sole semantic model |
+| PrimVal carries type tag | Redundant for correct programs but enables debugging and translator validation |
+| Fixed arity for Prim agents | Efficient: binary ops fire in one rule; matches hardware; avoids double-firing overhead |
+| 30 intrinsics, closed set | Prevents user code from forging primitives; all ops reachable through trait wrappers |
+| IO is a monad, not a capability | Cleaner composition; no explicit IO threading in user code; established functional language model |
+| Functor/Applicative/Monad in prelude | Option and Result become monads for free; IO monad instance in Std.IO satisfies orphan rule |
+| IO_token internal, not surface | User sees clean `IO a` type; sequencing enforced by net data dependency without exposing the token |
+| do-notation deferred to v1.1 | Grammar extension not required for correctness; explicit bind is sufficient for v1.0 |
+| File has independent IO_token | Multiple files can be operated on concurrently in the net; no cross-file sequencing constraints |
 
 ---
 
@@ -1031,10 +1275,11 @@ repeated use requires `_ω` or `_&`.
 breaking change to the language, not to a library. The prelude must therefore be minimal
 and stable.
 
-**The four-layer hierarchy:**
+**The five-layer hierarchy:**
 
 ```
 Layer 0 — Std.Prelude   (auto-imported; no deps)
+           └── prim_*   (compiler intrinsics; not importable)
 Layer 1 — Std.String    (close to native types)
            Std.Show     (depends on Std.String)
 Layer 2 — Std.List      (built on Prelude)
@@ -1148,6 +1393,55 @@ pub val or  : Bool →¹ Bool →¹ Bool    -- strict (not short-circuit)
 Short-circuit evaluation requires lazy semantics not available in the current
 interaction net model. `and` and `or` are strict; lazy variants are deferred to v2.0.
 
+**Effect abstraction traits (Functor → Applicative → Monad hierarchy):**
+
+These traits abstract over type constructors `f : Type -> Type` that represent
+computational contexts. They are defined in the prelude so that `Option` and `Result`
+instances are available everywhere, and so that `Std.IO` can provide a `Monad IO`
+instance by the orphan rule (IO is defined in `Std.IO`).
+
+```
+pub trait Functor f where
+  val fmap : (a -> b) -> f a -> f b
+  -- Laws: fmap id = id
+  --       fmap (g . h) = fmap g . fmap h
+
+pub trait Applicative f where Functor f
+  val pure  : a -> f a
+  val apply : f (a -> b) -> f a -> f b
+  -- Laws: pure id <*> v = v
+  --       pure f <*> pure x = pure (f x)
+
+pub trait Monad f where Applicative f
+  val bind : f a -> (a -> f b) -> f b
+  val then : f a -> f b -> f b     -- default: bind x (λ_:0:a. y)
+  -- Laws: bind (pure x) f = f x
+  --       bind m pure = m
+  --       bind (bind m f) g = bind m (λx. bind (f x) g)
+```
+
+**Instances for prelude types:**
+
+```
+-- Option: failure-propagating monad (flatMap semantics)
+impl Functor Option
+impl Applicative Option
+impl Monad Option
+-- bind (Some x) f = f x
+-- bind None     _ = None
+
+-- Result: error-propagating monad
+impl Functor (Result ε)
+impl Applicative (Result ε)
+impl Monad (Result ε)
+-- bind (Ok x)  f = f x
+-- bind (Err e) _ = Err e
+```
+
+**`Monad IO` is not in the prelude.** `IO` is defined in `Std.IO` (Layer 3). By the
+orphan rule (§8.4), `impl Monad IO` must live in `Std.IO`. The prelude defines the
+trait; `Std.IO` provides the instance.
+
 #### Native Type Impl Matrix
 
 | Type | Eq | Ord | Hash | Clone | Copy | Drop | Add | Sub | Mul | Div | Rem | Neg |
@@ -1169,9 +1463,15 @@ implement arithmetic traits — no meaningful numeric semantics apply.
 impl Eq (Option α) where Eq α
 impl Ord (Option α) where Ord α
 impl Clone (Option α) where Clone α
+impl Functor Option
+impl Applicative Option
+impl Monad Option
 
 impl Eq (Result α ε) where Eq α, Eq ε
 impl Clone (Result α ε) where Clone α, Clone ε
+impl Functor (Result ε)
+impl Applicative (Result ε)
+impl Monad (Result ε)
 
 impl Eq Ordering
 impl Ord Ordering
@@ -1181,9 +1481,100 @@ impl Copy Ordering
 
 **Why is `Show` absent from the prelude?** `Show` returns `String`. `String` is defined
 in `Std.String` (Layer 1). A prelude trait cannot depend on a stdlib type. `Show` lives
-in `Std.Show` (see §16.5).
+in `Std.Show` (see §16.6).
 
-### 16.3 `Std.String`
+### 16.3 Compiler Intrinsics (`prim_*`)
+
+> **This subsection is implementation documentation, not user-facing language.**
+> No λ◦ source program may reference `prim_*` names directly. Doing so produces
+> an `UnknownPrimitive` error at Gate 5 unless the name is in the table below.
+
+The closed intrinsics set is the bridge between the trait method surface (§16.2) and
+the `Prim(op)` / `PrimVal` agents in the interaction net (§6.1). Each arithmetic or
+comparison trait method in the prelude is a thin wrapper over exactly one intrinsic.
+
+#### Integer intrinsics (30 total)
+
+| Intrinsic | Arity | Agent | Prelude wrapper | Result type |
+|-----------|-------|-------|-----------------|-------------|
+| `prim_iadd` | binary | `Prim(IAdd)` | `Add.add : Int -> Int -> Int` | `Int` |
+| `prim_isub` | binary | `Prim(ISub)` | `Sub.sub : Int -> Int -> Int` | `Int` |
+| `prim_imul` | binary | `Prim(IMul)` | `Mul.mul : Int -> Int -> Int` | `Int` |
+| `prim_idiv` | binary | `Prim(IDiv)` | `Div.div : Int -> Int -> Result Int DivisionByZero` | `Result Int DivisionByZero` |
+| `prim_irem` | binary | `Prim(IRem)` | `Rem.rem : Int -> Int -> Result Int DivisionByZero` | `Result Int DivisionByZero` |
+| `prim_ineg` | unary | `Prim(INeg)` | `Neg.neg : Int -> Int` | `Int` |
+| `prim_ieq` | binary | `Prim(IEq)` | `Eq.eq : &Int -> &Int -> Bool` | `Bool` |
+| `prim_ilt` | binary | `Prim(ILt)` | `Ord.lt : &Int -> &Int -> Bool` | `Bool` |
+| `prim_igt` | binary | `Prim(IGt)` | `Ord.gt : &Int -> &Int -> Bool` | `Bool` |
+| `prim_ile` | binary | `Prim(ILe)` | `Ord.lte : &Int -> &Int -> Bool` | `Bool` |
+| `prim_ige` | binary | `Prim(IGe)` | `Ord.gte : &Int -> &Int -> Bool` | `Bool` |
+| `prim_ihash` | unary | `Prim(IHash)` | `Hash.hash : &Int -> Int` | `Int` |
+
+#### Float intrinsics
+
+| Intrinsic | Arity | Agent | Prelude wrapper | Result type |
+|-----------|-------|-------|-----------------|-------------|
+| `prim_fadd` | binary | `Prim(FAdd)` | `Add.add : Float -> Float -> Float` | `Float` |
+| `prim_fsub` | binary | `Prim(FSub)` | `Sub.sub : Float -> Float -> Float` | `Float` |
+| `prim_fmul` | binary | `Prim(FMul)` | `Mul.mul : Float -> Float -> Float` | `Float` |
+| `prim_fdiv` | binary | `Prim(FDiv)` | `Div.div : Float -> Float -> Result Float DivisionByZero` | `Result Float DivisionByZero` |
+| `prim_frem` | binary | `Prim(FRem)` | `Rem.rem : Float -> Float -> Result Float DivisionByZero` | `Result Float DivisionByZero` |
+| `prim_fneg` | unary | `Prim(FNeg)` | `Neg.neg : Float -> Float` | `Float` |
+| `prim_feq` | binary | `Prim(FEq)` | `Eq.eq : &Float -> &Float -> Bool` | `Bool` |
+| `prim_flt` | binary | `Prim(FLt)` | `Ord.lt : &Float -> &Float -> Bool` | `Bool` |
+| `prim_fgt` | binary | `Prim(FGt)` | `Ord.gt : &Float -> &Float -> Bool` | `Bool` |
+| `prim_fle` | binary | `Prim(FLe)` | `Ord.lte : &Float -> &Float -> Bool` | `Bool` |
+| `prim_fge` | binary | `Prim(FGe)` | `Ord.gte : &Float -> &Float -> Bool` | `Bool` |
+
+#### Bool intrinsics
+
+| Intrinsic | Arity | Agent | Prelude wrapper | Result type |
+|-----------|-------|-------|-----------------|-------------|
+| `prim_bnot` | unary | `Prim(BNot)` | `not : Bool -> Bool` | `Bool` |
+| `prim_band` | binary | `Prim(BAnd)` | `and : Bool -> Bool -> Bool` | `Bool` |
+| `prim_bor` | binary | `Prim(BOr)` | `or : Bool -> Bool -> Bool` | `Bool` |
+| `prim_beq` | binary | `Prim(BEq)` | `Eq.eq : &Bool -> &Bool -> Bool` | `Bool` |
+| `prim_bhash` | unary | `Prim(BHash)` | `Hash.hash : &Bool -> Int` | `Int` |
+
+#### Char intrinsics
+
+| Intrinsic | Arity | Agent | Prelude wrapper | Result type |
+|-----------|-------|-------|-----------------|-------------|
+| `prim_ceq` | binary | `Prim(CEq)` | `Eq.eq : &Char -> &Char -> Bool` | `Bool` |
+| `prim_cord` | unary | `Prim(COrd)` | `Ord.compare : &Char -> &Char -> Ordering` | `Ordering` |
+| `prim_chash` | unary | `Prim(CHash)` | `Hash.hash : &Char -> Int` | `Int` |
+
+**Total: 30 intrinsics.** This set is **closed and final for v1.0**. No new intrinsics
+can be added without a language version bump. User code that attempts to call an
+undeclared `prim_*` name receives `UnknownPrimitive` at Gate 5.
+
+**Example — how `add 3 5` evaluates end-to-end:**
+
+```
+-- 1. User writes:
+add 3 5
+
+-- 2. Name resolution: `add` resolves to Std.Prelude.Add.add for Int
+
+-- 3. Prelude definition:
+val add : Int -> Int -> Int = λx:1:Int. λy:1:Int. prim_iadd x y
+
+-- 4. Net translation emits:
+@( @( λx. λy. Prim(IAdd)[aux1=x, aux2=y],  PrimVal(Int,3) ),  PrimVal(Int,5) )
+
+-- 5. Evaluator fires β-reductions (two @ ⋈ λ rules):
+Prim(IAdd)[aux1=PrimVal(Int,3), aux2=PrimVal(Int,5)]
+
+-- 6. Evaluator fires primitive rule (Prim(IAdd) ⋈ PrimVal ⋈ PrimVal):
+PrimVal(Int, 8)
+
+-- 7. Result: the value 8
+```
+
+The evaluator loop is uniform throughout — steps 5 and 6 use the same "find active
+pair, fire rule" mechanism. No special cases.
+
+### 16.4 `Std.String`
 
 ```
 use Std.String
@@ -1224,7 +1615,7 @@ impl Hash String
 impl Clone String
 ```
 
-### 16.4 `Std.List`
+### 16.5 `Std.List`
 
 ```
 use Std.List
@@ -1272,7 +1663,7 @@ impl Clone (List α) where Clone α
 once. This is safe for lists of linear values. Since `ω` is a supertype of `1` under
 the semiring order, passing an `ω`-function is always valid.
 
-### 16.5 `Std.Show`
+### 16.6 `Std.Show`
 
 `Show` cannot be in the prelude (§16.2). It lives here as a minimal module with no
 dependencies beyond `Std.String`.
@@ -1300,7 +1691,7 @@ impl Show (List α) where Show α
 impl Show String                              -- wraps in double quotes
 ```
 
-### 16.6 `Std.Map`
+### 16.7 `Std.Map`
 
 ```
 use Std.Map
@@ -1343,35 +1734,105 @@ impl Clone (Map κ ν) where Clone κ, Clone ν
 impl Show (Map κ ν) where Show κ, Show ν
 ```
 
-### 16.7 `Std.IO`
+### 16.8 `Std.IO`
 
 ```
 use Std.IO
 ```
 
-IO is **capability-based**. The runtime provides a single `IO` capability at program
-entry. It is passed at `_&` multiplicity — it can be observed and used to perform
-effects, but cannot be duplicated or consumed. Functions that perform IO declare the
-capability in their type; functions that do not are pure by signature.
+#### Design
+
+`IO` is a **monad**. An `IO a` value is a *description* of an effectful computation
+that, when executed by the runtime, performs IO and produces a value of type `a`. No
+effect occurs until the runtime executes the description. This is the established
+functional language model (Haskell, PureScript).
+
+**Purity by type.** A function whose return type does not mention `IO` is guaranteed
+pure. The compiler need not inspect the body — the type is the proof.
+
+**Sequencing** is done with `bind` and `then` from the `Monad` trait (§16.2):
 
 ```
-pub type IO                    -- abstract capability; never user-constructed
+-- Print two lines in sequence
+then (println "hello") (println "world")
 
--- Standard streams
-pub val print     : &IO →¹ &String →¹ Unit
-pub val println   : &IO →¹ &String →¹ Unit
-pub val eprint    : &IO →¹ &String →¹ Unit        -- stderr
-pub val read_line : &IO →¹ Result String IOError  -- stdin
+-- Read a line and print it back
+bind read_line (λline:1:Result String IOError.
+  match line with {
+    Ok s  => println s
+  | Err _ => println "error"
+  })
+```
 
--- File operations
-pub type File                  -- abstract; linear (_1) — must be closed exactly once
+**`do`-notation** (syntactic sugar for nested `bind`/`then`) is deferred to v1.1 and
+documented in §13 as an open question.
 
-pub val open  : &IO →¹ &String →¹ Result File IOError
-pub val close : File →¹ Unit                       -- consumes file (linear)
-pub val read  : &IO →¹ &File →¹ Result String IOError
-pub val write : &IO →¹ &File →¹ &String →¹ Result Unit IOError
+#### Internal Implementation
 
--- IO error type
+Internally the compiler lowers `IO a` to a function over a linear `IO_token`:
+
+```
+-- Surface type seen by user:
+IO a  ≡  (description of a computation producing a)
+
+-- Internal net representation:
+IO a  ≡  IO_token ->¹ (IO_token, a)
+```
+
+`bind` threads the token from one action to the next, enforcing sequencing by data
+dependency in the net. The parallel evaluator cannot reorder IO actions because each
+action's output token is the next action's input token. This is the same mechanism as
+the `RealWorld` token in GHC's IO implementation, but made explicit in the interaction
+net model via the `IO_token` agent (§6.1).
+
+The `IO_token` is created by the runtime at program entry and passed to `main`. It is
+discarded when `main` returns. The token cannot be duplicated or erased — it does not
+implement `Clone` or `Drop` — so the runtime is the sole creator and final consumer.
+
+#### Type Definition and Monad Instance
+
+```
+pub type IO a               -- abstract; internal rep is IO_token ->¹ (IO_token, a)
+
+impl Functor IO
+impl Applicative IO
+impl Monad IO
+-- bind m f = λtoken. let (token', a) = m token in f a token'
+-- pure x   = λtoken. (token, x)
+```
+
+#### Standard Streams
+
+```
+pub val print     : &String -> IO Unit
+pub val println   : &String -> IO Unit
+pub val eprint    : &String -> IO Unit           -- stderr
+pub val eprintln  : &String -> IO Unit           -- stderr with newline
+pub val read_line : IO (Result String IOError)   -- stdin; Result handles EOF
+```
+
+#### File Operations
+
+`File` is **linear** (`_1`). The only way to eliminate a `File` value is to call
+`close`. Forgetting to close is a `LinearityViolation` at Gate 3 — a compile-time
+error, not a resource leak. `File` does not implement `Drop`.
+
+Internally, each `File` has its own `IO_token` derived from the main token at `open`
+time. File operations thread this per-file token, allowing multiple files to be
+operated on concurrently in the net without sequencing constraints between them.
+
+```
+pub type File               -- abstract; linear (_1)
+
+pub val open  : &String -> IO (Result File IOError)
+pub val close : File ->¹ IO Unit                  -- consumes file (linear)
+pub val read  : &File -> IO (Result String IOError)
+pub val write : &File -> &String -> IO (Result Unit IOError)
+```
+
+#### IO Error Type
+
+```
 pub type IOError (..)
   = NotFound
   | PermissionDenied
@@ -1382,21 +1843,41 @@ impl Show IOError
 impl Eq IOError
 ```
 
-**`File` is linear.** Forgetting to call `close` is a `LinearityViolation` at Gate 3 —
-a compile-time error, not a resource leak. `File` does not implement `Drop`
-automatically; the only legal way to eliminate a `File` value is to call `close`.
+#### Complete Usage Example
 
-**Purity by signature.** A function whose type does not mention `&IO` is guaranteed
-pure. The compiler need not inspect the body — the type is the proof.
+```
+-- Read a file and print its contents, handling errors
+let program : IO Unit =
+  bind (open "hello.txt") (λr:1:Result File IOError.
+    match r with {
+      Err e => println (show e)
+    | Ok f  =>
+        bind (read f) (λcontents:1:Result String IOError.
+          bind (close f) (λ_:1:Unit.
+            match contents with {
+              Err e => println (show e)
+            | Ok s  => println s
+            }))
+    })
+```
 
-### 16.8 Standard Library Module Summary
+Note that `close f` is called before inspecting `contents` — this is valid because
+`read` borrows `f` (`&File`) while `close` consumes it (`File ->¹`). The borrow ends
+before `close` is called, satisfying the borrow checker.
+
+### 16.9 Standard Library Module Summary
 
 ```
 Std
 ├── Prelude     -- auto-imported
-│               -- Bool, Unit, Option, Result, Ordering
-│               -- Eq, Ord, Hash, Clone, Copy, Drop, Sized
-│               -- all native type impls
+│   │           -- Bool, Unit, Option, Result, Ordering
+│   │           -- Eq, Ord, Hash, Clone, Copy, Drop, Sized
+│   │           -- Add, Sub, Mul, Div, Rem, Neg, DivisionByZero
+│   │           -- Functor, Applicative, Monad
+│   │           -- not, and, or
+│   │           -- all native type impls
+│   │           -- Functor/Applicative/Monad for Option and Result
+│   └── prim_*  -- 30 compiler intrinsics (not importable, not user-accessible)
 │
 ├── String      -- String type and text operations           [Layer 1]
 ├── Show        -- Show trait and native impls               [Layer 1]
@@ -1405,7 +1886,9 @@ Std
 ├── Map         -- persistent ordered map                    [Layer 2]
 ├── Set         -- persistent ordered set (Map κ Unit)       [Layer 2]
 │
-└── IO          -- capability-based IO, File, IOError        [Layer 3]
+└── IO          -- IO monad, File, IOError                   [Layer 3]
+                -- impl Monad IO (orphan rule: IO defined here)
+                -- impl Functor IO, impl Applicative IO
 ```
 
 **Deferred to v1.1**: `Std.Array` — a contiguous growable array requiring allocator
@@ -1440,19 +1923,38 @@ and is included in scope but not fully specified here.
 |----|---------|--------|
 | E1 | §2 | Split into §2.A (concrete surface grammar, normative) and §2.B (theoretical calculus); added concrete examples |
 | E2 | §2.A.1 | Removed `e.op₂ e₁` and `op₁ e` — binary/unary ops are prelude trait methods, not syntax |
-| E3 | §2.A.4 | Constructor patterns noted as deferred; current parser handles `_` and identifier only |
-| E4 | §2.A.5 | Added Module-Level Declarations grammar |
-| E5 | §7.4 | Added two-phase S5′ verification rationale |
-| E6 | §8.4 | Added Orphan Rule (new subsection) |
-| E7 | §8.5 | Added Impl Visibility rules (new subsection) |
-| E8 | §9 | Restructured: removed operations list; added §9.2 noting ops are prelude trait methods; moved Float/NaN note to §9.3 |
-| E9 | §10 | Extended error table with Gate column and new module-system errors |
-| E10 | §11 | Complete rewrite: one-file-one-module, visibility, import forms, six-gate pipeline, .λo format, incremental recompilation, link step |
-| E11 | §12 | Added Phase 5 and Phase 6 to roadmap |
-| E12 | §13 | Added resolved questions 22–26 for grammar, ops, and pattern decisions |
-| E13 | §14 | Added trade-off entries for grammar minimalism, Div totality, and strict boolean ops |
-| E14 | §16.2 | Added arithmetic traits: Add, Sub, Mul, Div, Rem, Neg, DivisionByZero; added boolean prelude functions; updated native type impl matrix to include arithmetic column |
-| E15 | §16 | New section: Standard Library & Prelude (Prelude, String, List, Show, Map, IO) |
+| E3 | §2.A.3 | Complete type grammar with implementation status per production; added naming convention (lowercase=variable, uppercase=constructor); added `type_app` juxtaposition production; added `&` in type position; added product type; marked Phase 5a prerequisites |
+| E4 | §2.A.4 | Constructor patterns noted as Phase 5a; current parser handles `_` and identifier only |
+| E5 | §2.A.5 | Fully specified `sig`, `val_def`, `constraint` productions; corrected `impl C for T` ordering; noted all decls as Phase 5a/5 prerequisites |
+| E6 | §2.A.6 | Expanded examples section: implemented terms, Phase 5a types, Phase 5a/5 module declarations — each group clearly labelled |
+| E7 | §7.4 | Added two-phase S5′ verification rationale |
+| E8 | §8.4 | Added Orphan Rule (new subsection) |
+| E9 | §8.5 | Added Impl Visibility rules (new subsection) |
+| E10 | §9 | Restructured: removed operations list; added §9.2 noting ops are prelude trait methods; moved Float/NaN note to §9.3 |
+| E11 | §10 | Extended error table with Gate column and new module-system errors |
+| E12 | §11 | Complete rewrite: one-file-one-module, visibility, import forms, six-gate pipeline, .λo format, incremental recompilation, link step |
+| E13 | §12 | Added Phase 5a (grammar extensions, 2 weeks) as hard prerequisite; Phases 5 and 6 marked as blocked; added prerequisite table |
+| E14 | §13 | Added resolved questions 22–31 covering grammar split, ops, div totality, boolean logic, naming convention, type application, reference types, impl syntax, Phase 5a |
+| E15 | §14 | Added trade-off entries for grammar minimalism, Div totality, strict boolean ops, naming convention |
+| E16 | §16.2 | Added arithmetic traits: Add, Sub, Mul, Div, Rem, Neg, DivisionByZero; added boolean prelude functions; updated native type impl matrix |
+| E18 | §6.1 | Added `Prim(op)` and `PrimVal(type, value)` agents; documented typed payload, fixed arity, user-inaccessibility |
+| E19 | §6.2 | Added four primitive interaction rules: binary/unary Prim⋈PrimVal, PrimVal⋈ε, PrimVal⋈δ; documented uniform evaluator loop |
+| E20 | §6.3 | Renamed to Translation Policy (unchanged) |
+| E21 | §6.4 | New subsection: Primitive Translation — how literals, prim_* calls, and prelude wrappers translate to Prim/PrimVal agents; end-to-end `add 3 5` example |
+| E22 | §9.2 | Updated to reference §6.4 primitive agents and uniform evaluator |
+| E23 | §10 | Added `UnknownPrimitive` error at Gate 5 |
+| E24 | §16.1 | Updated layer hierarchy to five layers; added prim_* as compiler-internal sublayer of Prelude |
+| E25 | §16.3 | New subsection: Compiler Intrinsics — complete 30-intrinsic table with arity, agent, prelude wrapper, and result type for all Int/Float/Bool/Char operations |
+| E26 | §16.4–16.9 | Renumbered from 16.3–16.8 to accommodate new §16.3 |
+| E27 | §16.9 | Updated module summary tree to show prim_* as non-importable sublayer of Prelude; added arithmetic traits to prelude listing |
+| E28 | §6.1 | Added `PrimIO(op)` (3-port) and `IO_token` (1-port, linear) agents; documented IO_token lifecycle and sequencing semantics |
+| E29 | §6.2 | Added PrimIO interaction rules; documented IO_token cannot interact with ε or δ |
+| E30 | §16.2 | Added full Functor → Applicative → Monad trait hierarchy with laws; added Functor/Applicative/Monad instances for Option and Result; noted Monad IO lives in Std.IO by orphan rule |
+| E31 | §16.8 | Complete rewrite: IO is a monad (`IO a` describes effectful computation); removed capability-passing design; added internal IO_token lowering explanation; monadic API with bind/then; File with independent token for concurrency; complete usage example |
+| E32 | §16.9 | Updated summary tree: IO monad and Functor/Applicative/Monad in prelude; Monad IO instance in Std.IO |
+| E33 | §13 | Added resolved questions 37–42: IO monad, IO location, Monad hierarchy, IO_token sequencing, do-notation deferral, File linearity |
+| E34 | §13 | Added open questions: do-notation (v1.1), FFI, short-circuit ops (v2.0) |
+| E35 | §14 | Added trade-off entries for monadic IO, Functor/Applicative/Monad in prelude, IO_token internal, do-notation deferral, File concurrency |
 
 ### v2.3 Corrections
 

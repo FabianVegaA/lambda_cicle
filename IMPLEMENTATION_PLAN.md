@@ -1,7 +1,7 @@
 # λ◦ (Lambda-Circle) Implementation Plan
 
-**Version**: 1.3  
-**Date**: 2026-03-29  
+**Version**: 1.4  
+**Date**: 2026-03-31  
 **Language**: Rust (implementation), Lean4 (formal proofs)  
 **Scope**: Full v1.0 language  
 **Timeline**: Research/Prototype
@@ -16,8 +16,10 @@
 - Automatic memory management (no GC)
 - Trait system with global coherence
 - S5' concurrency safety (compile-time verifiable)
+- Module system with separate compilation
+- Standard library with prelude auto-import
 
-Reference: `lambda-circle-design-document-v2.2.md`
+Reference: `design/lambda-circle-design-document-v2_4.md`
 
 ---
 
@@ -105,9 +107,16 @@ lambda-cicle/
 │   └── codegen/
 │       ├── mod.rs
 │       └── binary.rs
+├── design/                     # Design documents
+│   └── lambda-circle-design-document-v2_4.md
 ├── stdlib/                     # Standard library
-│   ├── prelude.λ
-│   └── builtins.λ
+│   └── Std/
+│       ├── Prelude.λ
+│       ├── String.λ
+│       ├── List.λ
+│       ├── Map.λ
+│       ├── Show.λ
+│       └── IO.λ
 ├── tests/
 │   ├── typecheck/
 │   ├── runtime/
@@ -382,17 +391,27 @@ pub fn translate(term: &Term) -> Net {
 
 **Key**: `_ω` bindings insert δ-agents; `_0` bindings insert ε-agents.
 
-### Step 2.5: Primitive Operations + Hybrid Execution (Weeks 21-22)
+### Step 2.5: Primitive Operations + Uniform Evaluation (Weeks 21-22)
 
 **Files**: `src/runtime/primitives/operations.rs`
 
 - Native types: `Int`, `Float`, `Bool`, `Char`, `Unit` (§9.1)
-- Operations: `+`, `-`, `*`, `/`, `%`, `==`, `!=`, `<`, `>`, `<=`, `>=`, `&&`, `||`, `!`, unary `-`
+- Operations defined as trait methods in prelude, not as syntactic primitives
 
-**Hybrid interleaving** (§9.3):
-1. Reduce all primitive redexes
-2. Fire interaction net rules
-3. Repeat
+**Uniform evaluation model** (v2.4 §6.1-6.2):
+- `Prim(op)`: compiler-internal agent (3-port for binary, 2-port for unary)
+- `PrimVal(type, value)`: typed primitive value agent
+- `PrimIO(op)`: IO primitive (3-port with IO_token port)
+- `IO_token`: linear token for IO sequencing (cannot be duplicated/erased)
+
+**Interaction rules** (§6.2):
+- `Prim(bin_op) ⋈ PrimVal(t, v₁) ⋈ PrimVal(t, v₂)` → `PrimVal(t, result)`
+- `Prim(un_op) ⋈ PrimVal(t, v)` → `PrimVal(t', result)`
+- `PrimIO(op) ⋈ IO_token ⋈ arg` → execute side effect, produce `(IO_token_new, result)`
+- `PrimVal ⋈ ε` → erase value
+- `PrimVal ⋈ δ` → duplicate value (Copy always satisfied)
+
+**No hybrid evaluator**: `Prim ⋈ PrimVal` rules handled identically to `λ ⋈ @`
 
 ### Step 2.6: Sequential Evaluator (Week 23)
 
@@ -458,6 +477,7 @@ pub fn insert(&mut self, trait_name: TraitName, ty: Type, impl: Implementation) 
 
 - At link time: ensure at most one `impl C τ` per type-trait pair
 - Error: `CoherenceViolation`
+- Orphan rule: impl legal only in module defining the trait or the type (§8.4)
 
 ### Step 3.3: Trait Resolution (Week 30)
 
@@ -483,19 +503,20 @@ fn resolve(trait_name: TraitName, ty: Type, registry: &Registry) -> Result<Imple
 
 **Files**: `src/modules/loader.rs`, `src/modules/export.rs`, `src/modules/linker.rs`
 
-- Per-module compilation: parse → type-check → translate → emit `.λo`
-- Import/export declarations
-- Link-time coherence + S5' checks
+- One file, one module (§11.1)
+- Private by default, `pub` for explicit export
+- Export granularity: opaque (`pub type T`) vs transparent (`pub type T(..)`)
+- Impl blocks never exported, impls become visible on type/trait import (§8.5)
 
 ### Step 3.5: Linker Integration (Week 33)
 
 **File**: `src/modules/linker.rs`
 
-- Collect all `.λo` files
-- Build global registry Σ
-- Run coherence check
-- Run S5' verification
-- Emit executable
+**Four-step link procedure** (§11.6):
+1. L1: Build global registry Σ from all `.λo` files
+2. L2: Global coherence check → `CoherenceViolation`
+3. L3: Global S5' verification on composed net → `S5PrimeViolation`
+4. L4: Emit executable
 
 ---
 
@@ -519,16 +540,59 @@ fn resolve(trait_name: TraitName, ty: Type, registry: &Registry) -> Result<Imple
 // Use Result with custom error enum
 pub type Result<T> = std::result::Result<T, TypeError>;
 
+#[derive(Debug, Error)]
 pub enum TypeError {
-    LinearityViolation(String, Multiplicity),
+    // Gate 1
+    #[error("Parse error: {0}")]
+    ParseError(String),
+    #[error("Module name mismatch: file {file} defines {module}")]
+    ModuleNameMismatch { file: String, module: String },
+    
+    // Gate 2
+    #[error("Module not found: {0}")]
+    ModuleNotFound(String),
+    #[error("Name not found: {0}")]
+    NameNotFound(String),
+    #[error("Cycle detected in import graph: {0:?}")]
+    CycleDetected(Vec<String>),
+    
+    // Gate 3
+    #[error("Linearity violation: {0}")]
+    LinearityViolation(String),
+    #[error("Borrow context mixed with quantities")]
     BorrowContextMix,
+    #[error("Multiplicity mismatch: declared {declared}, inferred {inferred}")]
+    MultiplicityMismatch { declared: Multiplicity, inferred: Multiplicity },
+    #[error("Trait not found: {trait} for {ty}")]
+    TraitNotFound { trait: TraitName, ty: Type },
+    #[error("Duplicate impl: {trait} for {ty}")]
+    DuplicateImpl { trait: TraitName, ty: Type },
+    #[error("Strict positivity violation: {0}")]
+    StrictPositivityViolation(String),
+    #[error("Orphan impl: {trait} for {ty} defined in {module}")]
+    OrphanImpl { trait: TraitName, ty: Type, module: String },
+    
+    // Gate 4
+    #[error("Borrowed reference escapes scope: {0}")]
     OwnershipEscape(String),
-    TraitNotFound(TraitName, Type),
-    DuplicateImpl(TraitName, Type),
+    #[error("Non-exhaustive pattern match")]
     NonExhaustivePattern,
-    MultiplicityMismatch(Multiplicity, Multiplicity),
-    StrictPositivityViolation(TypeName),
+    #[error("Borrow mode in match arm: {0}")]
     BorrowInMatchArm(String),
+    
+    // Gate 5
+    #[error("S5' violation: {0}")]
+    S5PrimeViolation(String),
+    #[error("Unknown primitive: {0}")]
+    UnknownPrimitive(String),
+    
+    // Link step
+    #[error("Coherence violation: {trait} for {ty} defined in {module_a} and {module_b}")]
+    CoherenceViolation { trait: TraitName, ty: Type, module_a: String, module_b: String },
+    
+    // Gate 6
+    #[error("Serialization error: {0}")]
+    SerializationError(String),
 }
 ```
 
@@ -548,8 +612,14 @@ pub type TypeId = Index<Type>;
 ### 3. Module Format
 
 - Source: `.λ` text files
-- Object: `.λo` binary (capnp or MessagePack)
+- Object: `.λo` binary (MessagePack, §11.5)
+  - **Type section**: exported types, kinds, constructors, multiplicities
+  - **Trait section**: exported traits and impl blocks
+  - **Net section**: compiled interaction nets (full nets in v1.0)
+  - **Export table**: public names → section locations
+  - **Debug section**: source positions, original names
 - Executable: Custom ELF-like binary format
+- **Incremental recompilation**: export-table content hash determines recompilation need
 
 ### 4. Parallel Runtime
 
@@ -611,18 +681,25 @@ cargo fmt
 
 ---
 
-## Open Questions
+## Open Questions (Deferred to v2.0)
 
-1. **FFI**: How to interface with native code? (Deferred to v2.0)
-2. **Dynamic module loading**: Plugin system? (Deferred to v2.0)
-3. **Error messages**: What level of detail for type errors?
-4. **Debug format**: DWARF-compatible debug info?
+1. **FFI**: How to interface with native code?
+2. **Dynamic module loading**: Plugin system?
+3. **Debug format**: DWARF-compatible debug info?
+4. **Mutable maps/arrays**: Requires allocator design and `&`-mutation semantics
+5. **Short-circuit `and`/`or`**: Requires lazy semantics not available in interaction nets
+6. **Templated nets**: Named-port `.λo` format for zero-duplication linking
+7. **Versioning**: Disambiguating two versions of the same module
+
+## Open Questions (Deferred to v1.1)
+
+1. **`do`-notation**: Syntactic sugar for nested `bind`/`then` chains
 
 ---
 
 ## References
 
-- λ◦ Design Document v2.2: `lambda-circle-design-document-v2.2.md`
+- λ◦ Design Document v2.4: `design/lambda-circle-design-document-v2_4.md`
 - Atkey (2018): Quantitative Type Theory
 - Lafont (1990): Interaction Nets
 - Girard (1987): Linear Logic
@@ -706,9 +783,48 @@ cargo fmt
 **Step 4.3**: DOT Export - GraphViz net visualization
 **Step 4.4**: Benchmarking - Performance testing infrastructure
 
+### Phase 5a: Grammar Extensions ⏳ NEXT
+
+**Goal**: Implement grammar gaps required to parse module system and stdlib syntax
+
+> **Critical prerequisite**: Phase 5a unblocks both Phase 5 (module system) and Phase 6 (stdlib)
+
+| Extension | Design §2.A.3 | Status | Priority |
+|-----------|---------------|--------|----------|
+| Naming convention | §2.A.3 | ✅ DONE | HIGH |
+| Type variables (`lower_identifier` in type) | §2.A.3 line 173 | ✅ DONE | HIGH |
+| Type application (`type_app`) | §2.A.3 line 163 | ✅ DONE | HIGH |
+| Reference types (`& type_atom`) | §2.A.3 line 174 | ✅ DONE | HIGH |
+| Arrow types (`type -> type`) | §2.A.3 line 159 | ✅ DONE | HIGH |
+| Product types (`(type, type)`) | §2.A.3 line 176 | ✅ DONE | LOW |
+| `impl C for T` syntax | §2.A.5 line 225 | ⚠️ PENDING | HIGH |
+| Constructor patterns | §2.A.5 | ✅ DONE | LOW |
+
+---
+
 ### Phase 5: Module System ✅ COMPLETE
 
 **Goal**: Implement full module system per §11 of design document v2.4
+
+#### Six-Gate Compilation Pipeline (§11.4)
+
+| Gate | Input | Output | Errors |
+|------|-------|--------|--------|
+| Gate 1 | `.λ` text | AST | `ParseError`, `ModuleNameMismatch` |
+| Gate 2 | AST + import graph | Resolved AST | `ModuleNotFound`, `NameNotFound`, `CycleDetected` |
+| Gate 3 | Resolved AST | Typed AST | `LinearityViolation`, `OrphanImpl`, `TraitNotFound`, `DuplicateImpl` |
+| Gate 4 | Typed AST | Verified Typed AST | `OwnershipEscape`, `NonExhaustivePattern`, `BorrowInMatchArm` |
+| Gate 5 | Verified Typed AST | Interaction net | `S5PrimeViolation` |
+| Gate 6 | Net + type info | `.λo` binary | `SerializationError` |
+
+#### Four-Step Link Procedure (§11.6)
+
+| Step | Description | Output |
+|------|-------------|--------|
+| L1 | Build global registry Σ | `(TraitName × Type) → (Impl, DefiningModule)` |
+| L2 | Global coherence check | `CoherenceViolation` or proceed |
+| L3 | Global S5' verification | `S5PrimeViolation` or proceed |
+| L4 | Emit executable | Custom ELF-like binary |
 
 #### Completed Steps
 
@@ -721,7 +837,7 @@ cargo fmt
 | 5.5 | Full .λo Format | ✅ DONE |
 | 5.6 | CLI Build Commands | ✅ DONE |
 
-#### Current State (Already Implemented)
+#### Current State
 
 | Component | Status |
 |-----------|--------|
@@ -731,82 +847,64 @@ cargo fmt
 | Linker skeleton | ✅ Done |
 | Coherence checker | ✅ Done |
 | Trait registry | ✅ Done |
-| Simple `.λo` format | ⚠️ Partial |
-| Parser module syntax | ✅ Done (Step 5.1) |
+| `.λo` format (5 sections) | ✅ Done |
+| Parser module syntax | ✅ Done |
+| File-to-module mapping | ✅ Done |
+| Visibility (`pub`) | ✅ Done |
+| Import forms (`use`) | ✅ Done |
+| Module DAG (cycle detection) | ✅ Done |
+| Incremental recompilation | ✅ Done |
 
-#### What's Missing
+#### What's Remaining
 
 | Feature | Priority |
 |---------|----------|
-| File-to-module mapping | HIGH |
-| Visibility (`pub`) | HIGH |
-| Import forms (`use`) | HIGH |
-| Orphan rule enforcement | HIGH |
-| Module DAG (cycle detection) | HIGH |
-| Full `.λo` format | MEDIUM |
-| Incremental recompilation | MEDIUM |
-
-#### Implementation Steps
-
-**Step 5.1**: Parser Extensions for Module Syntax
-- Add `pub`, `use`, `trait`, `impl`, `no_prelude` tokens
-- Add module-level declaration parsing
-
-**Step 5.2**: Visibility & Export System
-- Add visibility field to declarations
-- Implement opaque (`pub type T`) vs transparent (`pub type T(..)`) exports
-
-**Step 5.3**: Import Resolution
-- Build import DAG from `use` statements
-- Detect cycles → `CycleDetected` error
-
-**Step 5.4**: Orphan Rule Enforcement
-- Track defining module for each type and trait
-- Verify impl in correct module at Gate 3
-
-**Step 5.5**: Full `.λo` Format
-- Type section, Trait section, Net section, Export table, Debug section
-- MessagePack serialization
-
-**Step 5.6**: CLI Build Commands
-- `build` command - Compile .λ to .λo object file
-- `link` command - Link .λo files to executable
-- `clean` command - Remove build artifacts
-- Added `From<std::io::Error>` for `ModuleError` to handle file I/O
-
-#### Files to Create
-
-```
-src/core/name_resolver.rs     # Import resolution + DAG building
-src/modules/serializer.rs     # Full .λo serialization
-src/build/mod.rs              # Build system + incremental
-```
-
-#### Files to Modify
-
-```
-src/core/parser/lexer.rs      # Add module keywords
-src/core/parser/grammar.rs    # Add declaration parsing
-src/modules/export.rs         # Visibility
-src/modules/linker.rs        # Full deserialization
-src/traits/coherence.rs      # Orphan rule
-src/main.rs                  # Add build/link commands
-```
+| `impl C for T` syntax (vs `impl T : C`) | HIGH |
 
 ### Phase 6: Standard Library ⏳ IN PROGRESS
 
 **Goal**: Implement stdlib per §16 of design document v2.4
 
-> **Note**: The design document (§12) designates **Phase 5a** as a prerequisite for Phase 5 & 6.
-> Phase 5a covers grammar extensions needed to express the module system and stdlib syntax.
+#### Stdlib Structure (§16)
 
-**Phase 5a Requirements** (per §2.A.3, §2.A.5):
-- Arrow types (`->`)
-- Type application (`Option a`)
-- Type variables (`a`, `α`)
-- Reference types (`&a`)
-- Trait method signatures
-- Trait implementations with methods
+```
+Std.Prelude   -- auto-imported (types, traits, native impls)
+Std.String    -- Linear string type
+Std.List      -- Singly-linked list
+Std.Map       -- Persistent map (balanced tree)
+Std.Show      -- Debug formatting trait
+Std.IO        -- Capability-based IO
+```
+
+#### Prelude Contents (§16.1)
+
+**Minimal auto-imported** (cannot depend on stdlib):
+- Native types: `Bool`, `Unit`
+- Option/Result types: `Option a`, `Result a e`, `Ordering`, `DivisionByZero`
+- Arithmetic traits: `Add`, `Sub`, `Mul`, `Div`, `Rem`, `Neg`, `Eq`, `Ord`, `Hash`, `Clone`, `Copy`, `Drop`, `Sized`
+- `Functor`, `Applicative`, `Monad` hierarchy
+- `prim_*` wrappers (internal, §16.3)
+
+#### Primitive Intrinsics (§16.3)
+
+**Closed set of 30 intrinsics** - any `prim_*` not in this table is `UnknownPrimitive` at Gate 5:
+
+| Category | Operations |
+|----------|------------|
+| Arithmetic | `prim_iadd`, `prim_isub`, `prim_imul`, `prim_idiv`, `prim_irem`, `prim_ineg` |
+| Float arithmetic | `prim_fadd`, `prim_fsub`, `prim_fmul`, `prim_fdiv`, `prim_fneg` |
+| Comparison | `prim_ieq`, `prim_ifeq`, `prim_igt`, `prim_ige`, `prim_ilt`, `prim_ile` |
+| Float comparison | `prim_feq`, `prim_fne`, `prim_fgt`, `prim_fge`, `prim_flt`, `prim_fle` |
+| Boolean | `prim_not`, `prim_and`, `prim_or` |
+| Char | `prim_chr`, `prim_ord` |
+| IO | `prim_print`, `prim_read_line`, `prim_open_file`, `prim_close_file`, `prim_file_write` |
+
+#### IO Model (§16.4)
+
+- `IO a`: monadic type describing effectful computation
+- `IO_token`: linear agent for sequencing (not visible to user code)
+- `PrimIO(op)`: 3-port agent consuming/producing `IO_token`
+- `File`: linear type requiring explicit `close` (forgotten close = `LinearityViolation`)
 
 #### Completed Steps
 
@@ -817,45 +915,8 @@ src/main.rs                  # Add build/link commands
 | 6.3 | Native type impls (Int, Float, Bool, Char, Unit, Ordering) | ✅ DONE |
 | 6.4 | CLI build supports parse_program for declarations | ✅ DONE |
 | 6.5 | Grammar fixes for type keywords as type names | ✅ DONE |
-
-#### Grammar Enhancements Required (Phase 5a per §2.A.3)
-
-The design document marks several productions as **Phase 5a prerequisites** - required for stdlib:
-
-| Production | Design §2.A.3 | Current Status | Priority |
-|------------|---------------|----------------|----------|
-| `type -> type` (arrow) | §2.A.3 line 159 | ✅ DONE | HIGH |
-| `type_atom type_atom` (type app) | §2.A.3 line 163 | ✅ DONE | HIGH |
-| `lower_identifier` (type var) | §2.A.3 line 173 | ✅ DONE | HIGH |
-| `& type_atom` (reference) | §2.A.3 line 174 | ✅ DONE | MEDIUM |
-| `(type, type)` (product) | §2.A.3 line 176 | ✅ DONE | LOW |
-| `upper_identifier` (type constr) | §2.A.3 line 172 | ✅ DONE | MEDIUM |
-| Trait `sig` (method signature) | §2.A.5 line 235 | ✅ DONE | HIGH |
-| Trait `val_def` (impl method) | §2.A.5 line 238 | ✅ DONE | HIGH |
-| Trait without body (marker) | §2.A.5 | ✅ DONE | HIGH |
-| `impl T for C` syntax | §2.A.5 line 225 | ⚠️ Using `impl T : C` | PENDING |
-
-#### Current Grammar Issues
-
-1. ~~**Arrow types**: `ty()` only parses atoms, not `a -> b`~~ ✅ FIXED
-2. ~~**Type application**: `Option a` fails - expects `)` after `Option`~~ ✅ FIXED
-3. ~~**Type variables**: `a` in type position fails - expects uppercase~~ ✅ FIXED
-4. ~~**Reference types**: `&a` in type position not parsed~~ ✅ FIXED
-5. ~~**Trait methods**: `trait Eq a where { val eq: &a -> &a -> Bool }` fails~~ ✅ FIXED
-6. ~~**Trait without body**: `trait Copy a where Clone a` fails~~ ✅ FIXED
-7. **Impl syntax**: Design uses `impl T for C`, current uses `impl T : C` | PENDING
-
-#### Stdlib Structure
-
-```
-Std/
-├── Prelude     -- auto-imported (types, traits, native impls)
-├── String     -- Linear string type [Layer 1]
-├── Show       -- Show trait [Layer 1]
-├── List       -- Singly-linked list [Layer 2]
-├── Map        -- Persistent map [Layer 2]
-└── IO         -- Capability-based IO [Layer 3]
-```
+| 6.6 | Functor/Applicative/Monad hierarchy | ✅ DONE |
+| 6.7 | `prim_*` wrappers | ✅ DONE |
 
 #### Implementation Steps
 
@@ -863,13 +924,7 @@ Std/
 
 **Step 6.2**: Prelude trait declarations ✅ DONE
 
-**Step 6.3**: Grammar enhancements (Phase 5a) - Needed before stdlib
-- Add arrow type parsing (`type -> type`)
-- Add type variable parsing (`lower_identifier` in type position)
-- Add type application parsing (`Option a`)
-- Add reference type parsing (`&a`)
-- Fix trait method signatures
-- Fix impl syntax to `impl T for C`
+**Step 6.3**: Grammar enhancements ✅ DONE
 
 **Step 6.4**: Implement Std.String
 
@@ -893,13 +948,13 @@ Std/
 
 ### What's Next
 
-- **Phase 5a**: Grammar enhancements (arrow types, type application, type variables, reference types, trait methods)
-- Phase 6: Complete remaining stdlib modules (String, List, Map, Show, IO)
-- Version 1.0 Release
+1. **Fix `impl C for T` syntax** (Phase 5a remaining item)
+2. Phase 6: Complete stdlib modules (String, List, Map, Show, IO)
+3. Version 1.0 Release
 
 ---
 
-*Plan Version: 1.8*  
+*Plan Version: 1.9*  
 *Created: 2026-03-27*  
-*Updated: 2026-03-29*  
+*Updated: 2026-03-31*  
 *Status: Phase 6 IN PROGRESS*

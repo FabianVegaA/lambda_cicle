@@ -35,6 +35,9 @@ pub enum InteractionResult {
     Erasure,
     Commute,
     EraseBranch,
+    PrimEval,
+    PrimValErase,
+    PrimValDup,
     None,
 }
 
@@ -166,6 +169,15 @@ impl Net {
             return result;
         }
         if let Some(result) = self.try_erase_branch() {
+            return result;
+        }
+        if let Some(result) = self.try_prim_eval() {
+            return result;
+        }
+        if let Some(result) = self.try_prim_val_erase() {
+            return result;
+        }
+        if let Some(result) = self.try_prim_val_dup() {
             return result;
         }
         InteractionResult::None
@@ -348,10 +360,116 @@ impl Net {
         None
     }
 
+    fn try_prim_eval(&mut self) -> Option<InteractionResult> {
+        use crate::runtime::primitives::PrimVal;
+
+        for (prim_id, node) in self.nodes.iter().enumerate() {
+            let Agent::Prim(op) = &node.agent else {
+                continue;
+            };
+
+            let prim_id = NodeId(prim_id);
+            let arity = op.arity();
+
+            let mut values: Vec<PrimVal> = Vec::with_capacity(arity);
+            let mut value_nodes: Vec<(NodeId, PortIndex)> = Vec::with_capacity(arity);
+
+            let mut all_values = true;
+            for port_idx in 0..arity {
+                if let Some((node_id, port)) =
+                    self.get_connected_port(prim_id, PortIndex(port_idx + 1))
+                {
+                    if let Agent::PrimVal(val) = &self.get_node(node_id)?.agent {
+                        values.push(val.clone());
+                        value_nodes.push((node_id, port));
+                    } else {
+                        all_values = false;
+                        break;
+                    }
+                } else {
+                    all_values = false;
+                    break;
+                }
+            }
+
+            if !all_values || values.len() != arity {
+                continue;
+            }
+
+            let result = op.apply(&values)?;
+
+            for (vn_id, vn_port) in &value_nodes {
+                self.disconnect_port(*vn_id, *vn_port)?;
+            }
+
+            let prim_node = self.get_node_mut(prim_id)?;
+            *prim_node = Node::prim_val(result);
+
+            return Some(InteractionResult::PrimEval);
+        }
+        None
+    }
+
+    fn try_prim_val_erase(&mut self) -> Option<InteractionResult> {
+        for (val_id, node) in self.nodes.iter().enumerate() {
+            if !matches!(node.agent, Agent::PrimVal(_)) {
+                continue;
+            }
+
+            let val_id = NodeId(val_id);
+
+            let port_0 = self.get_connected_port(val_id, PortIndex(0))?;
+            let (epsilon_id, epsilon_port_idx) = port_0;
+
+            if epsilon_port_idx != PortIndex(0) {
+                continue;
+            }
+
+            if !matches!(self.get_node(epsilon_id)?.agent, Agent::Epsilon) {
+                continue;
+            }
+
+            self.disconnect_port(val_id, PortIndex(0))?;
+            self.disconnect_port(epsilon_id, PortIndex(0))?;
+
+            return Some(InteractionResult::PrimValErase);
+        }
+        None
+    }
+
+    fn try_prim_val_dup(&mut self) -> Option<InteractionResult> {
+        for (val_id, node) in self.nodes.iter().enumerate() {
+            let Agent::PrimVal(val) = &node.agent else {
+                continue;
+            };
+
+            let val_id = NodeId(val_id);
+
+            let port_1 = self.get_connected_port(val_id, PortIndex(1))?;
+            let (delta_id, delta_port_idx) = port_1;
+
+            if delta_port_idx != PortIndex(1) {
+                continue;
+            }
+
+            if !matches!(self.get_node(delta_id)?.agent, Agent::Delta) {
+                continue;
+            }
+
+            let new_val = Node::prim_val(val.clone());
+            let new_val_id = self.add_node(new_val);
+
+            self.connect(delta_id, PortIndex(2), new_val_id, PortIndex(1));
+
+            return Some(InteractionResult::PrimValDup);
+        }
+        None
+    }
+
     pub fn is_stuck(&self) -> bool {
         for node in &self.nodes {
             match &node.agent {
-                Agent::Lambda | Agent::App | Agent::Delta => {
+                Agent::Lambda | Agent::App | Agent::Delta | Agent::Prim(_) | Agent::PrimIO(_) => {
                     return false;
                 }
                 _ => {}

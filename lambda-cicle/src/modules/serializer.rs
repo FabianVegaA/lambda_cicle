@@ -176,6 +176,18 @@ fn serialize_net_to_bytes(net: &Net) -> Vec<u8> {
                 buf.push(5);
                 5
             }
+            crate::runtime::net::Agent::PrimVal(_) => {
+                buf.push(6);
+                6
+            }
+            crate::runtime::net::Agent::PrimIO(_) => {
+                buf.push(7);
+                7
+            }
+            crate::runtime::net::Agent::IOToken => {
+                buf.push(8);
+                8
+            }
         };
         if agent_byte < 4 {
             buf.push(agent_byte);

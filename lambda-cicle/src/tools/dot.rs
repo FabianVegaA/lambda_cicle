@@ -44,6 +44,9 @@ fn format_node_label(agent: &Agent) -> String {
         Agent::Epsilon => "ε".to_string(),
         Agent::Constructor(name) => name.clone(),
         Agent::Prim(op) => format!("{:?}", op),
+        Agent::PrimVal(val) => format!("{:?}", val),
+        Agent::PrimIO(op) => format!("IO::{:?}", op),
+        Agent::IOToken => "IO_token".to_string(),
     }
 }
 
@@ -55,6 +58,9 @@ fn format_node_color(agent: &Agent) -> String {
         Agent::Epsilon => "gold".to_string(),
         Agent::Constructor(_) => "lightgray".to_string(),
         Agent::Prim(_) => "lightyellow".to_string(),
+        Agent::PrimVal(_) => "lightpink".to_string(),
+        Agent::PrimIO(_) => "orange".to_string(),
+        Agent::IOToken => "red".to_string(),
     }
 }
 

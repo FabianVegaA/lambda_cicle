@@ -1,7 +1,7 @@
 use crate::core::ast::types::Multiplicity;
 use crate::core::ast::{Arm, Literal, Pattern, Term};
 use crate::runtime::net::{Agent, Net, Node, NodeId, Port, PortIndex, Wire};
-use crate::runtime::PrimOp;
+use crate::runtime::primitives::{PrimOp, PrimVal};
 
 pub struct NetBuilder {
     net: Net,
@@ -178,12 +178,38 @@ impl NetBuilder {
                 let node = Node::prim(op.clone());
                 let id = self.net.add_node(node);
                 self.net.add_free_port(id, PortIndex(0));
-                self.net.add_free_port(id, PortIndex(1));
-                self.net.add_free_port(id, PortIndex(2));
+                let arity = op.arity();
+                for i in 0..arity {
+                    self.net.add_free_port(id, PortIndex(i + 1));
+                }
                 id
             }
-            _ => {
-                let node = Node::constructor(format!("{}", lit), 1);
+            Literal::Int(n) => {
+                let node = Node::prim_val(PrimVal::Int(*n));
+                let id = self.net.add_node(node);
+                self.net.add_free_port(id, PortIndex(0));
+                id
+            }
+            Literal::Float(f) => {
+                let node = Node::prim_val(PrimVal::Float(*f));
+                let id = self.net.add_node(node);
+                self.net.add_free_port(id, PortIndex(0));
+                id
+            }
+            Literal::Bool(b) => {
+                let node = Node::prim_val(PrimVal::Bool(*b));
+                let id = self.net.add_node(node);
+                self.net.add_free_port(id, PortIndex(0));
+                id
+            }
+            Literal::Char(c) => {
+                let node = Node::prim_val(PrimVal::Char(*c));
+                let id = self.net.add_node(node);
+                self.net.add_free_port(id, PortIndex(0));
+                id
+            }
+            Literal::Unit => {
+                let node = Node::prim_val(PrimVal::Unit);
                 let id = self.net.add_node(node);
                 self.net.add_free_port(id, PortIndex(0));
                 id

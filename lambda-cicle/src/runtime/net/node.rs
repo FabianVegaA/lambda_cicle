@@ -1,5 +1,5 @@
 use super::PortIndex;
-use crate::runtime::primitives::PrimOp;
+use crate::runtime::primitives::{IOOp, PrimOp, PrimVal};
 
 #[derive(Debug, Clone)]
 pub struct Node {
@@ -36,7 +36,21 @@ impl Node {
     }
 
     pub fn prim(op: PrimOp) -> Node {
-        Node::new(Agent::Prim(op), 3)
+        let arity = op.arity() + 1;
+        Node::new(Agent::Prim(op), arity)
+    }
+
+    pub fn prim_val(val: PrimVal) -> Node {
+        Node::new(Agent::PrimVal(val), 1)
+    }
+
+    pub fn prim_io(op: IOOp) -> Node {
+        let arity = op.arity() + 2;
+        Node::new(Agent::PrimIO(op), arity)
+    }
+
+    pub fn io_token() -> Node {
+        Node::new(Agent::IOToken, 1)
     }
 
     pub fn num_ports(&self) -> usize {
@@ -62,6 +76,9 @@ pub enum Agent {
     Epsilon,
     Constructor(String),
     Prim(PrimOp),
+    PrimVal(PrimVal),
+    PrimIO(IOOp),
+    IOToken,
 }
 
 impl Agent {
@@ -72,11 +89,21 @@ impl Agent {
             Agent::Delta => 3,
             Agent::Epsilon => 1,
             Agent::Constructor(_) => 0,
-            Agent::Prim(_) => 3,
+            Agent::Prim(op) => op.arity() + 1,
+            Agent::PrimVal(_) => 1,
+            Agent::PrimIO(op) => op.arity() + 2,
+            Agent::IOToken => 1,
         }
     }
 
     pub fn is_constructor(&self) -> bool {
         matches!(self, Agent::Constructor(_))
+    }
+
+    pub fn is_value(&self) -> bool {
+        matches!(
+            self,
+            Agent::PrimVal(_) | Agent::Constructor(_) | Agent::IOToken
+        )
     }
 }

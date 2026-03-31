@@ -22,13 +22,13 @@ impl Literal {
             Literal::Char(_) => Type::char(),
             Literal::Unit => Type::unit(),
             Literal::Prim(op) => match op {
-                PrimOp::Neg => Type::arrow(Type::int(), Multiplicity::One, Type::int()),
-                PrimOp::Add | PrimOp::Sub | PrimOp::Mul => Type::arrow(
+                PrimOp::INeg => Type::arrow(Type::int(), Multiplicity::One, Type::int()),
+                PrimOp::IAdd | PrimOp::ISub | PrimOp::IMul => Type::arrow(
                     Type::int(),
                     Multiplicity::One,
                     Type::arrow(Type::int(), Multiplicity::One, Type::int()),
                 ),
-                PrimOp::Div | PrimOp::Rem => Type::arrow(
+                PrimOp::IDiv | PrimOp::IRem => Type::arrow(
                     Type::int(),
                     Multiplicity::One,
                     Type::arrow(
@@ -37,13 +37,17 @@ impl Literal {
                         Type::inductive("Result".to_string(), vec![Type::int(), division_by_zero]),
                     ),
                 ),
-                PrimOp::Eq | PrimOp::Ne | PrimOp::Lt | PrimOp::Gt | PrimOp::Le | PrimOp::Ge => {
-                    Type::arrow(
-                        Type::int(),
-                        Multiplicity::One,
-                        Type::arrow(Type::int(), Multiplicity::One, Type::bool()),
-                    )
-                }
+                PrimOp::IEq
+                | PrimOp::IFEq
+                | PrimOp::ILt
+                | PrimOp::IGt
+                | PrimOp::ILe
+                | PrimOp::IGe => Type::arrow(
+                    Type::int(),
+                    Multiplicity::One,
+                    Type::arrow(Type::int(), Multiplicity::One, Type::bool()),
+                ),
+                _ => Type::int(),
             },
         }
     }

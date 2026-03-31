@@ -77,6 +77,15 @@ impl TraceDebugger {
                 InteractionResult::EraseBranch => {
                     println!("erase branch (δ ⋈ ε)");
                 }
+                InteractionResult::PrimEval => {
+                    println!("prim-eval (Prim ⋈ PrimVal)");
+                }
+                InteractionResult::PrimValErase => {
+                    println!("prim-val-erase (PrimVal ⋈ ε)");
+                }
+                InteractionResult::PrimValDup => {
+                    println!("prim-val-dup (PrimVal ⋈ δ)");
+                }
                 InteractionResult::None => {
                     println!("stuck");
                 }
@@ -92,7 +101,12 @@ impl TraceDebugger {
         net.nodes()
             .iter()
             .enumerate()
-            .filter(|(_, node)| matches!(node.agent, Agent::Lambda | Agent::App | Agent::Delta))
+            .filter(|(_, node)| {
+                matches!(
+                    node.agent,
+                    Agent::Lambda | Agent::App | Agent::Delta | Agent::Prim(_) | Agent::PrimIO(_)
+                )
+            })
             .map(|(i, _)| NodeId(i))
             .collect()
     }

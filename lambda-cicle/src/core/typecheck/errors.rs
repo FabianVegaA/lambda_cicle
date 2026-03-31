@@ -44,4 +44,7 @@ pub enum TypeError {
 
     #[error("Invalid pattern: {0}")]
     InvalidPattern(String),
+
+    #[error("Unknown primitive: {0}")]
+    UnknownPrimitive(String),
 }
