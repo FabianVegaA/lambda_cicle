@@ -3,22 +3,34 @@ use crate::core::multiplicity::semiring::Quantity;
 use crate::core::multiplicity::BorrowContextMix;
 use hashbrown::HashMap;
 
+#[derive(Debug, Clone)]
+pub struct ConstructorInfo {
+    pub type_name: String,
+    pub field_types: Vec<Type>,
+    pub result_type: Type,
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct TypeContext {
     bindings: HashMap<String, (Multiplicity, Type)>,
+    constructors: HashMap<String, ConstructorInfo>,
 }
 
 impl TypeContext {
     pub fn new() -> TypeContext {
         TypeContext {
             bindings: HashMap::new(),
+            constructors: HashMap::new(),
         }
     }
 
     pub fn extend(&self, var: String, mult: Multiplicity, ty: Type) -> TypeContext {
         let mut bindings = self.bindings.clone();
         bindings.insert(var, (mult, ty));
-        TypeContext { bindings }
+        TypeContext {
+            bindings,
+            constructors: self.constructors.clone(),
+        }
     }
 
     pub fn get(&self, var: &str) -> Option<&(Multiplicity, Type)> {
@@ -27,6 +39,19 @@ impl TypeContext {
 
     pub fn contains(&self, var: &str) -> bool {
         self.bindings.contains_key(var)
+    }
+
+    pub fn get_constructor(&self, name: &str) -> Option<&ConstructorInfo> {
+        self.constructors.get(name)
+    }
+
+    pub fn register_constructor(&self, name: String, info: ConstructorInfo) -> TypeContext {
+        let mut constructors = self.constructors.clone();
+        constructors.insert(name, info);
+        TypeContext {
+            bindings: self.bindings.clone(),
+            constructors,
+        }
     }
 
     pub fn is_empty(&self) -> bool {
@@ -52,7 +77,10 @@ impl TypeContext {
             }
         }
 
-        Ok(TypeContext { bindings: result })
+        Ok(TypeContext {
+            bindings: result,
+            constructors: self.constructors.clone(),
+        })
     }
 
     pub fn scale(&self, q: Quantity) -> Result<TypeContext, BorrowContextMix> {
@@ -72,7 +100,10 @@ impl TypeContext {
             result.insert(var.clone(), (new_mult, ty.clone()));
         }
 
-        Ok(TypeContext { bindings: result })
+        Ok(TypeContext {
+            bindings: result,
+            constructors: self.constructors.clone(),
+        })
     }
 
     pub fn weaken(&self, var: String, ty: Type) -> TypeContext {

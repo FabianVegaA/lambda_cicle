@@ -4,11 +4,7 @@ use lambda_cicle::runtime::primitives::{
 
 #[test]
 fn test_intrinsics_table_count() {
-    assert_eq!(
-        INTRINSICS_TABLE.len(),
-        33,
-        "Expected exactly 33 intrinsics (30 closed + 3 IO)"
-    );
+    assert_eq!(INTRINSICS_TABLE.len(), 38, "Expected exactly 38 intrinsics");
 }
 
 #[test]

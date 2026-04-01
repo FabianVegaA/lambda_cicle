@@ -1,0 +1,48 @@
+-- Std.IO - capability-based IO
+-- Layer 3 (depends on Prelude, String, Show)
+
+use Std.Prelude
+
+pub type IO a
+pub type File
+pub type IOError (..) = NotFound | PermissionDenied | UnexpectedEOF | Other String
+
+-- IO primitives (implemented in Rust via PrimIO)
+val prim_io_print : &String -> IO Unit
+val prim_io_println : &String -> IO Unit
+val prim_io_read_line : IO (Result String IOError)
+val prim_io_open : &String -> IO (Result File IOError)
+val prim_io_close : File -> IO Unit
+val prim_io_read : &File -> IO (Result String IOError)
+val prim_io_write : &File -> &String -> IO (Result Unit IOError)
+
+-- Standard streams
+pub val print : &String -> IO Unit = prim_io_print
+pub val println : &String -> IO Unit = prim_io_println
+pub val read_line : IO (Result String IOError) = prim_io_read_line
+pub val open : &String -> IO (Result File IOError) = prim_io_open
+pub val close : File -> IO Unit = prim_io_close
+pub val read : &File -> IO (Result String IOError) = prim_io_read
+pub val write : &File -> &String -> IO (Result Unit IOError) = prim_io_write
+
+-- Monad IO
+impl Functor for IO with fmap = \f : a -> b. \io : IO a. bind io (\x : a. pure (f x))
+impl Applicative for IO with
+    pure = prim_io_pure
+    apply = \iof : IO (a -> b). \iox : IO a. bind iof (\f : a -> b. fmap f iox)
+impl Monad for IO with
+    bind = prim_io_bind
+    then = \x : IO a. \y : IO b. bind x (\_:a. y)
+
+-- IOError impls
+impl Show IOError with show = \e : &IOError.
+    match e with { NotFound -> "File not found"
+        | PermissionDenied -> "Permission denied"
+        | UnexpectedEOF -> "Unexpected end of file"
+        | Other s -> s }
+
+impl Eq IOError with eq = \e1 : &IOError. \e2 : &IOError.
+    match e1 with { NotFound -> match e2 with { NotFound -> true | _ -> false }
+        | PermissionDenied -> match e2 with { PermissionDenied -> true | _ -> false }
+        | UnexpectedEOF -> match e2 with { UnexpectedEOF -> true | _ -> false }
+        | Other s1 -> match e2 with { Other s2 -> eq s1 s2 | _ -> false } }

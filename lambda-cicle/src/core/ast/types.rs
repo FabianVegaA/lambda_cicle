@@ -120,6 +120,7 @@ pub enum Type {
     Product(Box<Type>, Box<Type>),
     Sum(Box<Type>, Box<Type>),
     Var(String),
+    App(Box<Type>, Vec<Type>),
 }
 
 impl Type {
@@ -174,6 +175,10 @@ impl Type {
     pub fn char() -> Type {
         Type::Native(NativeKind::Char)
     }
+
+    pub fn app(ty: Type, args: Vec<Type>) -> Type {
+        Type::App(Box::new(ty), args)
+    }
 }
 
 impl fmt::Display for Type {
@@ -216,6 +221,21 @@ impl fmt::Display for Type {
             }
             Type::Var(name) => {
                 write!(f, "{}", name)
+            }
+            Type::App(ty, args) => {
+                if args.is_empty() {
+                    write!(f, "{}", ty)
+                } else {
+                    write!(
+                        f,
+                        "{}<{}>",
+                        ty,
+                        args.iter()
+                            .map(|a| a.to_string())
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    )
+                }
             }
         }
     }

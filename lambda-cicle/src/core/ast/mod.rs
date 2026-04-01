@@ -4,7 +4,7 @@ pub mod types;
 
 pub use types::{MethodName, Multiplicity, NativeKind, TraitName, Type, TypeName};
 
-pub use terms::{Arm, Decl, Literal, MethodDef, MethodSig, Term, UseMode, Visibility};
+pub use terms::{Arm, Constraint, Decl, Literal, MethodDef, MethodSig, Term, UseMode, Visibility};
 
 pub use patterns::Pattern;
 

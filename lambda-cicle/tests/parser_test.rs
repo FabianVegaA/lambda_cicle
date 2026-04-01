@@ -342,7 +342,7 @@ fn test_parse_ref_type() {
 
 #[test]
 fn test_parse_trait_with_method() {
-    let result = parse_program("pub trait Eq a where { val eq: &a -> &a -> Bool }");
+    let result = parse_program("pub trait Eq a { val eq: &a -> &a -> Bool }");
     eprintln!("Trait with method result: {:?}", result);
     assert!(
         result.is_ok(),
@@ -353,8 +353,7 @@ fn test_parse_trait_with_method() {
 
 #[test]
 fn test_parse_trait_with_supertrait() {
-    let result =
-        parse_program("pub trait Ord a where Eq a where { val compare: &a -> &a -> Bool }");
+    let result = parse_program("pub trait Ord a where Eq a { val compare: &a -> &a -> Bool }");
     eprintln!("Trait with supertrait result: {:?}", result);
     assert!(
         result.is_ok(),
@@ -364,8 +363,81 @@ fn test_parse_trait_with_supertrait() {
 }
 
 #[test]
-fn test_parse_impl_for_trait() {
-    let result = parse_program("impl Int : Ord where {}");
-    eprintln!("Impl result: {:?}", result);
-    assert!(result.is_ok(), "Impl should parse: {:?}", result);
+fn test_parse_impl_with_method() {
+    let result = parse_program(
+        "impl Eq for Int { val eq : Int -> Int -> Bool = \\x : Int. \\y : Int. prim_eq x y }",
+    );
+    eprintln!("Impl with method result: {:?}", result);
+    assert!(
+        result.is_ok(),
+        "Impl with method should parse: {:?}",
+        result
+    );
+}
+
+#[test]
+fn test_parse_match_with_constructors() {
+    let result = parse_program("match x with { Nil => Unit | Cons h t => Unit }");
+    eprintln!("Match with constructors result: {:?}", result);
+    assert!(
+        result.is_ok(),
+        "Match with constructors should parse: {:?}",
+        result
+    );
+}
+
+#[test]
+fn test_parse_nested_constructor_pattern() {
+    let result = parse_program("match xs with { Cons (Cons x Nil) t => Unit | _ => Unit }");
+    eprintln!("Nested constructor pattern result: {:?}", result);
+    assert!(
+        result.is_ok(),
+        "Nested constructor pattern should parse: {:?}",
+        result
+    );
+}
+
+#[test]
+fn test_parse_constructor_with_multiple_args() {
+    let result = parse_program("match xs with { Cons x Nil => Unit }");
+    eprintln!("Constructor with multiple args result: {:?}", result);
+    assert!(
+        result.is_ok(),
+        "Constructor with multiple args should parse: {:?}",
+        result
+    );
+}
+
+#[test]
+fn test_parse_constructor_with_underscore_wildcards() {
+    let result = parse_program("match xs with { Cons _ Nil => Unit }");
+    eprintln!("Constructor with underscore wildcards result: {:?}", result);
+    assert!(
+        result.is_ok(),
+        "Constructor with underscore wildcards should parse: {:?}",
+        result
+    );
+}
+
+#[test]
+fn test_parse_deeply_nested_patterns() {
+    let result =
+        parse_program("match xs with { Cons (Cons (Cons x Nil) Nil) t => Unit | _ => Unit }");
+    eprintln!("Deeply nested patterns result: {:?}", result);
+    assert!(
+        result.is_ok(),
+        "Deeply nested patterns should parse: {:?}",
+        result
+    );
+}
+
+#[test]
+fn test_parse_pattern_with_parens_grouping() {
+    let result = parse_program("match xs with { Cons (x) y => Unit | _ => Unit }");
+    eprintln!("Pattern with parens grouping result: {:?}", result);
+    assert!(
+        result.is_ok(),
+        "Pattern with parens grouping should parse: {:?}",
+        result
+    );
 }

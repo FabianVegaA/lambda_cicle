@@ -37,6 +37,7 @@ pub enum Token {
     DotDot,
     Equals,
     Arrow,
+    FatArrow,
     Pipe,
     Underscore,
     IntLit(i64),
@@ -112,11 +113,26 @@ impl Lexer {
                 }
                 Some('=') => {
                     self.advance();
-                    tokens.push(Token::Equals);
+                    if self.peek() == Some('>') {
+                        self.advance();
+                        tokens.push(Token::FatArrow);
+                    } else {
+                        tokens.push(Token::Equals);
+                    }
                 }
                 Some('_') => {
                     self.advance();
-                    tokens.push(Token::Underscore);
+                    if let Some(c) = self.peek() {
+                        if c.is_alphanumeric() || c == '_' {
+                            let ident = self.read_identifier()?;
+                            let ident = format!("_{}", ident);
+                            tokens.push(self.keyword_or_ident(&ident));
+                        } else {
+                            tokens.push(Token::Underscore);
+                        }
+                    } else {
+                        tokens.push(Token::Underscore);
+                    }
                 }
                 Some('-') => {
                     self.advance();

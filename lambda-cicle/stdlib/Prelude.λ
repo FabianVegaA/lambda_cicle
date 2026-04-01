@@ -10,68 +10,149 @@ pub type Ordering (..)
 pub type DivisionByZero (..)
 
 -- Boolean logic functions (§16.2)
-pub val not : Bool -> Bool = \x : Bool. match x with { True -> False | False -> True }
-pub val and : Bool -> Bool -> Bool = \x : Bool. \y : Bool. match x with { True -> y | False -> False }
-pub val or : Bool -> Bool -> Bool = \x : Bool. \y : Bool. match x with { True -> True | False -> y }
+pub val not : Bool -> Bool = \x : Bool. match x with { false -> true | true -> false }
+pub val and : Bool -> Bool -> Bool = \x : Bool. \y : Bool. match x with { true -> y | false -> false }
+pub val or : Bool -> Bool -> Bool = \x : Bool. \y : Bool. match x with { true -> true | false -> y }
+
+-- Effect abstraction traits (§16.2)
+pub trait Functor f where
+    val fmap : (a -> b) -> f a -> f b
+
+pub trait Applicative f where Functor f where
+    val pure : a -> f a
+    val apply : f (a -> b) -> f a -> f b
+
+pub trait Monad m where Applicative m where
+    val bind : m a -> (a -> m b) -> m b
+    val then : m a -> m b -> m b = \x : m a. \y : m b. bind x (\_:a. y)
 
 -- Traits with method signatures
-pub trait Eq a where { val eq: &a -> &a -> Bool }
-pub trait Ord a where Eq a where { val compare: &a -> &a -> Ordering }
-pub trait Hash a where Eq a where { val hash: &a -> Int }
-pub trait Clone a where { val clone: &a -> a }
+pub trait Eq a where
+    val eq : &a -> &a -> Bool
+    val neq : &a -> &a -> Bool = \x : &a. \y : &a. not (eq x y)
+
+pub trait Ord a where Eq a where
+    val compare : &a -> &a -> Ordering
+    val lt : &a -> &a -> Bool = \x : &a. \y : &a. prim_ilt x y
+    val gt : &a -> &a -> Bool = \x : &a. \y : &a. prim_igt x y
+    val lte : &a -> &a -> Bool = \x : &a. \y : &a. prim_ile x y
+    val gte : &a -> &a -> Bool = \x : &a. \y : &a. prim_ige x y
+
+pub trait Hash a where Eq a where
+    val hash : &a -> Int
+
+pub trait Clone a where
+    val clone : &a -> a
+
 pub trait Copy a where Clone a
-pub trait Drop a where { val drop: a -> Unit }
+
+pub trait Drop a where
+    val drop : a -> Unit
+
 pub trait Sized a
-pub trait Add a where { val add: a -> a -> a }
-pub trait Sub a where { val sub: a -> a -> a }
-pub trait Mul a where { val mul: a -> a -> a }
-pub trait Div a where { val div: a -> a -> Result a DivisionByZero }
-pub trait Rem a where { val rem: a -> a -> Result a DivisionByZero }
-pub trait Neg a where { val neg: a -> a }
+
+pub trait Add a where
+    val add : a -> a -> a
+
+pub trait Sub a where
+    val sub : a -> a -> a
+
+pub trait Mul a where
+    val mul : a -> a -> a
+
+pub trait Div a where
+    val div : a -> a -> Result a DivisionByZero
+
+pub trait Rem a where
+    val rem : a -> a -> Result a DivisionByZero
+
+pub trait Neg a where
+    val neg : a -> a
+
+-- Option instances
+impl Eq for (Option a) where Eq a with eq = \x : &(Option a). \y : &(Option a).
+    match x with { None -> match y with { None -> true | Some _ -> false } | Some xv ->
+        match y with { None -> false | Some yv -> eq xv yv } }
+
+impl Clone for (Option a) where Clone a with clone = \x : &(Option a).
+    match x with { None -> None | Some v -> Some (clone v) }
+
+impl Functor for Option with fmap = \f : a -> b. \opt : Option a.
+    match opt with { None -> None | Some x -> Some (f x) }
+
+impl Applicative for Option with
+    pure = \x : a. Some x
+    apply = \mf : Option (a -> b). \mx : Option a.
+        match mf with { None -> None | Some f ->
+            match mx with { None -> None | Some x -> Some (f x) } }
+
+impl Monad for Option with
+    bind = \m : Option a. \f : a -> Option b.
+        match m with { None -> None | Some x -> f x }
+
+-- Result instances
+impl Eq for (Result a e) where Eq a, Eq e with eq = \x : &(Result a e). \y : &(Result a e).
+    match x with { Err ex -> match y with { Err ey -> eq ex ey | Ok _ -> false } | Ok xv ->
+        match y with { Err _ -> false | Ok yv -> eq xv yv } }
+
+impl Clone for (Result a e) where Clone a, Clone e with clone = \x : &(Result a e).
+    match x with { Err e -> Err (clone e) | Ok v -> Ok (clone v) }
+
+impl Functor for (Result a) with fmap = \f : a -> b. \r : Result a e.
+    match r with { Err e -> Err e | Ok x -> Ok (f x) }
+
+impl Applicative for (Result a) with
+    pure = \x : a. Ok x
+    apply = \rf : Result (a -> b) e. \rx : Result a e.
+        match rf with { Err e -> Err e | Ok f ->
+            match rx with { Err e -> Err e | Ok x -> Ok (f x) } }
+
+impl Monad for (Result a) with
+    bind = \m : Result a e. \f : a -> Result b e.
+        match m with { Err e -> Err e | Ok x -> f x }
 
 -- Native Type Implementations
-impl Int : Eq where {}
-impl Int : Ord where {}
-impl Int : Hash where {}
-impl Int : Clone where {}
-impl Int : Copy where {}
-impl Int : Add where {}
-impl Int : Sub where {}
-impl Int : Mul where {}
-impl Int : Div where {}
-impl Int : Rem where {}
-impl Int : Neg where {}
+impl Eq for Int with eq = \x : &Int. \y : &Int. prim_ieq x y
+impl Ord for Int with compare = \x : &Int. \y : &Int. prim_ifeq x y
+impl Hash for Int with hash = \x : &Int. x
+impl Clone for Int with clone = \x : &Int. x
+impl Copy for Int
+impl Add for Int with add = prim_iadd
+impl Sub for Int with sub = prim_isub
+impl Mul for Int with mul = prim_imul
+impl Div for Int with div = prim_idiv
+impl Rem for Int with rem = prim_irem
+impl Neg for Int with neg = prim_ineg
 
-impl Float : Eq where {}
-impl Float : Ord where {}
-impl Float : Clone where {}
-impl Float : Copy where {}
-impl Float : Add where {}
-impl Float : Sub where {}
-impl Float : Mul where {}
-impl Float : Div where {}
-impl Float : Rem where {}
-impl Float : Neg where {}
+impl Eq for Float with eq = \x : &Float. \y : &Float. prim_feq x y
+impl Ord for Float with compare = \x : &Float. \y : &Float. prim_ifeq x y
+impl Clone for Float with clone = \x : &Float. x
+impl Copy for Float
+impl Add for Float with add = prim_fadd
+impl Sub for Float with sub = prim_fsub
+impl Mul for Float with mul = prim_fmul
+impl Div for Float with div = prim_fdiv
+impl Neg for Float with neg = prim_fneg
 
-impl Bool : Eq where {}
-impl Bool : Ord where {}
-impl Bool : Hash where {}
-impl Bool : Clone where {}
-impl Bool : Copy where {}
+impl Eq for Bool with eq = \x : &Bool. \y : &Bool. prim_ieq x y
+impl Ord for Bool with compare = \x : &Bool. \y : &Bool. prim_ifeq x y
+impl Hash for Bool with hash = \x : &Bool. x
+impl Clone for Bool with clone = \x : &Bool. x
+impl Copy for Bool
 
-impl Char : Eq where {}
-impl Char : Ord where {}
-impl Char : Hash where {}
-impl Char : Clone where {}
-impl Char : Copy where {}
+impl Eq for Char with eq = \x : &Char. \y : &Char. prim_ieq x y
+impl Ord for Char with compare = \x : &Char. \y : &Char. prim_ifeq x y
+impl Hash for Char with hash = \x : &Char. x
+impl Clone for Char with clone = \x : &Char. x
+impl Copy for Char
 
-impl Unit : Eq where {}
-impl Unit : Ord where {}
-impl Unit : Hash where {}
-impl Unit : Clone where {}
-impl Unit : Copy where {}
+impl Eq for Unit with eq = \x : &Unit. \y : &Unit. true
+impl Ord for Unit with compare = \x : &Unit. \y : &Unit. prim_ifeq 0 0
+impl Hash for Unit with hash = \x : &Unit. 0
+impl Clone for Unit with clone = \x : &Unit. x
+impl Copy for Unit
 
-impl Ordering : Eq where {}
-impl Ordering : Ord where {}
-impl Ordering : Clone where {}
-impl Ordering : Copy where {}
+impl Eq for Ordering with eq = \x : &Ordering. \y : &Ordering. prim_ieq x y
+impl Ord for Ordering with compare = \x : &Ordering. \y : &Ordering. prim_ifeq x y
+impl Clone for Ordering with clone = \x : &Ordering. x
+impl Copy for Ordering

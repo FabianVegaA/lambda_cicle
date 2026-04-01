@@ -176,15 +176,32 @@ pub fn type_check(term: &Term, ctx: &TypeContext) -> Result<(Type, TypeContext),
             Err(TypeError::TraitNotFound(trait_name.clone(), arg_ty))
         }
         Term::Constructor(name, args) => {
+            let constructor_info = ctx.get_constructor(name).ok_or_else(|| {
+                TypeError::InvalidApplication(format!("Unknown constructor: {}", name))
+            })?;
+
+            if args.len() != constructor_info.field_types.len() {
+                return Err(TypeError::InvalidApplication(format!(
+                    "Constructor {} expects {} arguments, got {}",
+                    name,
+                    constructor_info.field_types.len(),
+                    args.len()
+                )));
+            }
+
             let mut ctx = ctx.clone();
-            for arg in args {
-                let (_, new_ctx) = type_check(arg, &ctx)?;
+            for (arg, expected_ty) in args.iter().zip(&constructor_info.field_types) {
+                let (arg_ty, new_ctx) = type_check(arg, &ctx)?;
+                if arg_ty != *expected_ty {
+                    return Err(TypeError::InvalidApplication(format!(
+                        "Type mismatch in constructor {}: expected {:?}, got {:?}",
+                        name, expected_ty, arg_ty
+                    )));
+                }
                 ctx = new_ctx;
             }
-            Err(TypeError::InvalidApplication(format!(
-                "Unknown constructor: {}",
-                name
-            )))
+
+            Ok((constructor_info.result_type.clone(), ctx))
         }
         Term::NativeLiteral(lit) => Ok((lit.ty(), ctx.clone())),
     }
@@ -194,10 +211,56 @@ fn extend_with_pattern(ctx: &TypeContext, pattern: &Pattern) -> Result<TypeConte
     match pattern {
         Pattern::Wildcard => Ok(ctx.clone()),
         Pattern::Var(name) => Ok(ctx.extend(name.clone(), Multiplicity::One, Type::unit())),
-        Pattern::Constructor(_name, args) => {
+        Pattern::Constructor(name, args) => {
+            let constructor_info = ctx.get_constructor(name).ok_or_else(|| {
+                TypeError::InvalidApplication(format!("Unknown constructor in pattern: {}", name))
+            })?;
+
+            if args.len() != constructor_info.field_types.len() {
+                return Err(TypeError::InvalidApplication(format!(
+                    "Pattern constructor {} expects {} arguments, got {}",
+                    name,
+                    constructor_info.field_types.len(),
+                    args.len()
+                )));
+            }
+
             let mut new_ctx = ctx.clone();
-            for arg in args {
-                new_ctx = extend_with_pattern(&new_ctx, arg)?;
+            for (arg, field_ty) in args.iter().zip(&constructor_info.field_types) {
+                new_ctx = extend_with_pattern_with_type(&new_ctx, arg, field_ty)?;
+            }
+            Ok(new_ctx)
+        }
+    }
+}
+
+fn extend_with_pattern_with_type(
+    ctx: &TypeContext,
+    pattern: &Pattern,
+    expected_type: &Type,
+) -> Result<TypeContext, TypeError> {
+    match pattern {
+        Pattern::Wildcard => Ok(ctx.clone()),
+        Pattern::Var(name) => {
+            Ok(ctx.extend(name.clone(), Multiplicity::One, expected_type.clone()))
+        }
+        Pattern::Constructor(name, args) => {
+            let constructor_info = ctx.get_constructor(name).ok_or_else(|| {
+                TypeError::InvalidApplication(format!("Unknown constructor in pattern: {}", name))
+            })?;
+
+            if args.len() != constructor_info.field_types.len() {
+                return Err(TypeError::InvalidApplication(format!(
+                    "Pattern constructor {} expects {} arguments, got {}",
+                    name,
+                    constructor_info.field_types.len(),
+                    args.len()
+                )));
+            }
+
+            let mut new_ctx = ctx.clone();
+            for (arg, field_ty) in args.iter().zip(&constructor_info.field_types) {
+                new_ctx = extend_with_pattern_with_type(&new_ctx, arg, field_ty)?;
             }
             Ok(new_ctx)
         }
@@ -211,13 +274,9 @@ fn extend_with_pattern_as_borrow(
     match pattern {
         Pattern::Wildcard => Ok(ctx.clone()),
         Pattern::Var(name) => Ok(ctx.extend(name.clone(), Multiplicity::Borrow, Type::unit())),
-        Pattern::Constructor(_name, args) => {
-            let mut new_ctx = ctx.clone();
-            for arg in args {
-                new_ctx = extend_with_pattern_as_borrow(&new_ctx, arg)?;
-            }
-            Ok(new_ctx)
-        }
+        Pattern::Constructor(_name, _args) => Err(TypeError::InvalidApplication(
+            "Cannot borrow from constructor pattern".to_string(),
+        )),
     }
 }
 
@@ -258,6 +317,12 @@ pub fn check_strict_positivity(ty: &Type) -> Result<(), TypeError> {
         }
         Type::Native(_) => Ok(()),
         Type::Var(_) => Ok(()),
+        Type::App(_, args) => {
+            for arg in args {
+                check_strict_positivity(arg)?;
+            }
+            Ok(())
+        }
     }
 }
 
@@ -292,6 +357,12 @@ fn check_positive_occurrence(ty: &Type, type_param: &str) -> Result<(), TypeErro
         }
         Type::Native(_) => Ok(()),
         Type::Var(_) => Ok(()),
+        Type::App(_, args) => {
+            for arg in args {
+                check_positive_occurrence(arg, type_param)?;
+            }
+            Ok(())
+        }
     }
 }
 
@@ -321,6 +392,12 @@ fn check_negative_occurrence(ty: &Type, type_param: &str) -> Result<(), TypeErro
         }
         Type::Native(_) => Ok(()),
         Type::Var(_) => Ok(()),
+        Type::App(_, args) => {
+            for arg in args {
+                check_negative_occurrence(arg, type_param)?;
+            }
+            Ok(())
+        }
     }
 }
 

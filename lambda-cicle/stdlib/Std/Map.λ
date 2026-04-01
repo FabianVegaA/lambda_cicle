@@ -1,0 +1,118 @@
+-- Std.Map - persistent map using AVL tree
+-- Layer 2 (depends on Prelude and List)
+
+use Std.Prelude
+use Std.List
+
+pub type Map k v (..) = Empty | Node (Map k v) k v (Map k v) Int
+
+-- Helpers
+val height : &Map k v -> Int = \t : &(Map k v).
+    match t with { Empty -> 0 | Node _ _ _ _ h -> h }
+
+val make_node : Map k v -> k -> v -> Map k v -> Map k v = \l : Map k v. \key : k. \val : v. \r : Map k v.
+    let hl = height l in
+    let hr = height r in
+    let max = \x : Int. \y : Int. match prim_igt x y with { true -> x | false -> y } in
+    let h = prim_iadd 1 (max hl hr) in
+    Node l key val r h
+
+-- Rotations
+val rotate_right : Map k v -> Map k v = \t : Map k v.
+    match t with { Node (Node ll lk lv lr) kv vv r _ ->
+        make_node ll lk lv (make_node lr kv vv r)
+        | _ -> t }
+
+val rotate_left : Map k v -> Map k v = \t : Map k v.
+    match t with { Node l kv vv (Node rl rk rv rr) _ ->
+        make_node (make_node l kv vv rl) rk rv rr
+        | _ -> t }
+
+val balance : Map k v -> Map k v = \t : Map k v.
+    match t with { Empty -> Empty
+        | Node l kv vv r h ->
+        let hl = height l in
+        let hr = height r in
+        let diff = prim_isub hl hr in
+        match prim_igt diff 1 with { true ->
+            match l with { Node ll lk lv lr _ ->
+                match prim_igt (prim_isub (height ll) (height lr)) 0 with { true ->
+                    rotate_right t | false -> rotate_right (make_node (rotate_left l) kv vv r) } | _ -> t }
+            | false ->
+            match prim_ilt diff (-1) with { true ->
+                match r with { Node rl rk rv rr _ ->
+                    match prim_ilt (prim_isub (height rr) (height rl)) 0 with { true ->
+                        rotate_left t | false -> rotate_left (make_node l kv vv (rotate_right r)) } | _ -> t }
+                | false -> t } } }
+
+-- Operations
+pub val empty : Map k v = Empty
+
+pub val singleton : k -> v -> Map k v = \key : k. \val : v. Node Empty key val Empty 1
+
+pub val insert : k -> v -> Map k v -> Map k v = \key : k. \val : v. \t : Map k v.
+    match t with { Empty -> singleton key val
+        | Node l k v r _ ->
+        match prim_ilt key k with { true ->
+            balance (Node (insert key val l) k v r 0)
+            | false ->
+            match prim_igt key k with { true ->
+                balance (Node l k v (insert key val r) 0)
+                | false -> Node l key val r 0 } } }
+
+pub val lookup : &k -> &Map k v -> Option v = \key : &k. \t : &(Map k v).
+    match t with { Empty -> None
+        | Node l k v r _ ->
+        match prim_ilt key k with { true -> lookup key l
+            | false ->
+            match prim_igt key k with { true -> lookup key r
+                | false -> Some v } } }
+
+pub val delete : k -> Map k v -> Map k v = \key : k. \t : Map k v.
+    match t with { Empty -> Empty
+        | Node l k v r _ ->
+        match prim_ilt key k with { true ->
+            balance (Node (delete key l) k v r 0)
+            | false ->
+            match prim_igt key k with { true ->
+                balance (Node l k v (delete key r) 0)
+                | false ->
+                match l with { Empty -> r
+                    | _ ->
+                    match r with { Empty -> l
+                        | _ ->
+                        let (nk, nv, nr) = min_node r in
+                        balance (Node l nk nv nr 0) } } } }
+
+val min_node : Map k v -> (k, v, Map k v) = \t : Map k v.
+    match t with { Node Empty k v r _ -> (k, v, r)
+        | Node l k v r _ -> let (nk, nv, nr) = min_node l in (nk, nv, Node nr k v r 0) }
+
+pub val size : &Map k v -> Int = \t : &(Map k v).
+    match t with { Empty -> 0
+        | Node l _ _ r _ -> prim_iadd 1 (prim_iadd (size l) (size r)) }
+
+pub val contains : &k -> &Map k v -> Bool = \key : &k. \t : &(Map k v).
+    match lookup key t with { None -> false | Some _ -> true }
+
+-- List operations
+pub val keys : Map k v -> List k = \t : Map k v.
+    match t with { Empty -> Nil
+        | Node l k _ r _ -> append (keys l) (cons k (keys r)) }
+
+pub val values : Map k v -> List v = \t : Map k v.
+    match t with { Empty -> Nil
+        | Node l _ v r _ -> append (values l) (cons v (values r)) }
+
+pub val to_list : Map k v -> List (k, v) = \t : Map k v.
+    match t with { Empty -> Nil
+        | Node l k v r _ -> append (to_list l) (cons (pair k v) (to_list r)) }
+
+pub val from_list : List (k, v) -> Map k v = \lst : List (k, v).
+    fold_right (\kv : (k, v). \acc : Map k v. insert (fst kv) (snd kv) acc) lst empty
+
+-- Map impls
+impl Eq for (Map k v) where Eq k, Eq v with eq = \m1 : &(Map k v). \m2 : &(Map k v).
+    prim_ifeq (to_list m1) (to_list m2)
+
+impl Clone for (Map k v) where Clone k, Clone v with clone = from_list (map (\kv : (k, v). pair (clone (fst kv)) (clone (snd kv))) (to_list clone))

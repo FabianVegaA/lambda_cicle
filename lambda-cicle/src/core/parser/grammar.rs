@@ -1,7 +1,7 @@
 use super::lexer::Token;
 use crate::core::ast::{
-    Arm, Decl, Literal, MethodDef, MethodName, MethodSig, Multiplicity, Pattern, Term, TraitName,
-    Type, UseMode, Visibility,
+    Arm, Constraint, Decl, Literal, MethodDef, MethodName, MethodSig, Multiplicity, Pattern, Term,
+    TraitName, Type, UseMode, Visibility,
 };
 
 pub struct Parser<'a> {
@@ -131,40 +131,20 @@ impl<'a> Parser<'a> {
         let name = self.expect_ident()?;
         let params = self.parse_type_params()?;
 
-        // Handle optional where clause with supertrait
-        // Syntax: where TraitName type_param* [where {...}]
-        // We may have multiple where clauses - keep consuming until we hit {
-        loop {
-            if matches!(self.peek(), Some(&Token::LBrace)) {
-                break;
-            }
-            if matches!(self.peek(), Some(&Token::KwWhere)) {
-                self.advance();
-                // Skip supertrait parsing - consume the identifier and type params
-                if matches!(self.peek(), Some(&Token::Ident(_))) {
-                    self.advance();
-                    // Consume type params (type application)
-                    while matches!(self.peek(), Some(&Token::Ident(_)))
-                        || matches!(self.peek(), Some(&Token::TyInt))
-                        || matches!(self.peek(), Some(&Token::TyFloat))
-                        || matches!(self.peek(), Some(&Token::TyBool))
-                        || matches!(self.peek(), Some(&Token::TyChar))
-                        || matches!(self.peek(), Some(&Token::KwUnit))
-                    {
-                        self.advance();
-                    }
-                }
-            } else {
-                break;
-            }
-        }
+        let supertrait = if matches!(self.peek(), Some(&Token::KwWhere)) {
+            self.advance();
+            let supertrait_name_str = self.expect_ident()?;
+            let supertrait_name = TraitName(supertrait_name_str);
+            let supertrait_params = self.parse_type_params()?;
+            Some((supertrait_name, supertrait_params))
+        } else {
+            None
+        };
 
-        // Handle optional trait body - may be absent for marker traits
         let mut methods = Vec::new();
         if matches!(self.peek(), Some(&Token::LBrace)) {
             self.consume(&Token::LBrace)?;
             while !matches!(self.peek(), Some(&Token::RBrace)) {
-                // Parse optional "val" keyword
                 if matches!(self.peek(), Some(&Token::KwVal)) {
                     self.advance();
                 }
@@ -187,37 +167,82 @@ impl<'a> Parser<'a> {
             visibility,
             name,
             params,
+            supertrait,
             methods,
         })
     }
 
     fn impl_decl(&mut self) -> Result<Decl, ParseError> {
         self.consume(&Token::KwImpl)?;
-        let ty = self.ty()?;
-        self.consume(&Token::Colon)?;
+
         let trait_name_str = self.expect_ident()?;
         let trait_name = TraitName(trait_name_str);
-        self.consume(&Token::KwWhere)?;
-        self.consume(&Token::LBrace)?;
-        let mut methods = Vec::new();
-        while !matches!(self.peek(), Some(&Token::RBrace)) {
-            let method_name_str = self.expect_ident()?;
-            self.consume(&Token::Equals)?;
-            let term = Box::new(self.term()?);
-            methods.push(MethodDef {
-                name: MethodName(method_name_str),
-                term,
-            });
-            if matches!(self.peek(), Some(Token::RBrace)) {
-                break;
+
+        match self.peek() {
+            Some(Token::Ident(name)) if name == "for" => {
+                self.advance();
+            }
+            _ => {
+                return Err(ParseError::UnexpectedToken("expected 'for'".to_string()));
             }
         }
+
+        let ty = self.ty()?;
+
+        let constraints = if matches!(self.peek(), Some(&Token::KwWhere)) {
+            self.advance();
+            self.parse_constraints()?
+        } else {
+            Vec::new()
+        };
+
+        self.consume(&Token::LBrace)?;
+        let mut methods = Vec::new();
+
+        while !matches!(self.peek(), Some(&Token::RBrace)) {
+            self.consume(&Token::KwVal)?;
+
+            let method_name_str = self.expect_ident()?;
+            self.consume(&Token::Colon)?;
+            let method_ty = self.ty()?;
+            self.consume(&Token::Equals)?;
+            let term = Box::new(self.term()?);
+
+            methods.push(MethodDef {
+                name: MethodName(method_name_str),
+                ty: method_ty,
+                term,
+            });
+
+            if matches!(self.peek(), Some(&Token::Comma)) {
+                self.advance();
+            }
+        }
+
         self.consume(&Token::RBrace)?;
         Ok(Decl::ImplDecl {
             ty,
             trait_name,
+            constraints,
             methods,
         })
+    }
+
+    fn parse_constraints(&mut self) -> Result<Vec<Constraint>, ParseError> {
+        let mut constraints = Vec::new();
+        loop {
+            let trait_name_str = self.expect_ident()?;
+            let trait_name = TraitName(trait_name_str);
+            let ty = self.ty()?;
+            constraints.push(Constraint { trait_name, ty });
+
+            if matches!(self.peek(), Some(Token::Comma)) {
+                self.advance();
+            } else {
+                break;
+            }
+        }
+        Ok(constraints)
     }
 
     fn use_decl(&mut self) -> Result<Decl, ParseError> {
@@ -266,7 +291,19 @@ impl<'a> Parser<'a> {
     fn parse_type_params(&mut self) -> Result<Vec<String>, ParseError> {
         let mut params = Vec::new();
         while matches!(self.peek(), Some(&Token::Ident(_))) {
-            params.push(self.expect_ident()?);
+            let name = self.expect_ident()?;
+            if !name
+                .chars()
+                .next()
+                .map(|c| c.is_lowercase() || c == '_')
+                .unwrap_or(false)
+            {
+                return Err(ParseError::UnexpectedToken(format!(
+                    "type parameter must be lowercase, found '{}'",
+                    name
+                )));
+            }
+            params.push(name);
         }
         Ok(params)
     }
@@ -515,7 +552,7 @@ impl<'a> Parser<'a> {
         let mut arms = Vec::new();
         loop {
             let pattern = self.pattern()?;
-            self.consume(&Token::Arrow)?;
+            self.consume(&Token::FatArrow)?;
             let body = self.term()?;
             arms.push(Arm::new(pattern, body));
 
@@ -544,7 +581,7 @@ impl<'a> Parser<'a> {
         let mut arms = Vec::new();
         loop {
             let pattern = self.pattern()?;
-            self.consume(&Token::Arrow)?;
+            self.consume(&Token::FatArrow)?;
             let body = self.term()?;
             arms.push(Arm::new(pattern, body));
 
@@ -613,15 +650,15 @@ impl<'a> Parser<'a> {
     }
 
     fn ty_arrow(&mut self) -> Result<Type, ParseError> {
-        let mut lhs = self.ty_app()?;
+        let lhs = self.ty_app()?;
 
         if matches!(self.peek(), Some(&Token::Arrow)) {
             self.advance();
             let rhs = self.ty_arrow()?;
-            lhs = Type::arrow(lhs, Multiplicity::One, rhs);
+            Ok(Type::arrow(lhs, Multiplicity::One, rhs))
+        } else {
+            Ok(lhs)
         }
-
-        Ok(lhs)
     }
 
     fn ty_app(&mut self) -> Result<Type, ParseError> {
@@ -643,9 +680,15 @@ impl<'a> Parser<'a> {
                     new_args.push(arg);
                     Type::inductive(name.0.clone(), new_args)
                 }
+                Type::Var(name) => Type::app(Type::Var(name.clone()), vec![arg]),
+                Type::App(base, args) => {
+                    let mut new_args = args.clone();
+                    new_args.push(arg);
+                    Type::app(*base.clone(), new_args)
+                }
                 _ => {
                     return Err(ParseError::UnexpectedToken(
-                        "expected type constructor".to_string(),
+                        "expected type constructor or type variable".to_string(),
                     ))
                 }
             };
@@ -716,6 +759,25 @@ impl<'a> Parser<'a> {
     }
 
     fn pattern(&mut self) -> Result<Pattern, ParseError> {
+        let p = self.pattern_atom()?;
+        let mut args = Vec::new();
+        while self.is_pattern_atom_start() {
+            args.push(self.pattern_atom()?);
+        }
+        if args.is_empty() {
+            Ok(p)
+        } else {
+            match p {
+                Pattern::Constructor(name, mut ctor_args) => {
+                    ctor_args.extend(args);
+                    Ok(Pattern::Constructor(name, ctor_args))
+                }
+                _ => Ok(p),
+            }
+        }
+    }
+
+    fn pattern_atom(&mut self) -> Result<Pattern, ParseError> {
         match self.peek() {
             Some(Token::Underscore) => {
                 self.advance();
@@ -724,10 +786,43 @@ impl<'a> Parser<'a> {
             Some(Token::Ident(name)) => {
                 let name = name.clone();
                 self.advance();
-                Ok(Pattern::var(name))
+                if name
+                    .chars()
+                    .next()
+                    .map(|c| c.is_lowercase())
+                    .unwrap_or(false)
+                {
+                    Ok(Pattern::Var(name))
+                } else {
+                    let args = self.pattern_args()?;
+                    Ok(Pattern::Constructor(name, args))
+                }
             }
+            Some(Token::LParen) => self.pattern_parens(),
             _ => Err(ParseError::UnexpectedToken("expected pattern".to_string())),
         }
+    }
+
+    fn pattern_args(&mut self) -> Result<Vec<Pattern>, ParseError> {
+        let mut args = Vec::new();
+        while self.is_pattern_atom_start() {
+            args.push(self.pattern_atom()?);
+        }
+        Ok(args)
+    }
+
+    fn is_pattern_atom_start(&self) -> bool {
+        matches!(
+            self.peek(),
+            Some(Token::Underscore) | Some(Token::Ident(_)) | Some(Token::LParen)
+        )
+    }
+
+    fn pattern_parens(&mut self) -> Result<Pattern, ParseError> {
+        self.consume(&Token::LParen)?;
+        let p = self.pattern()?;
+        self.consume(&Token::RParen)?;
+        Ok(p)
     }
 
     fn peek(&self) -> Option<&Token> {

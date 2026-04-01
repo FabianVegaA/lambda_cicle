@@ -48,6 +48,7 @@ pub enum PrimVal {
     Bool(bool),
     Char(char),
     Unit,
+    String(String),
 }
 
 impl PrimVal {
@@ -58,6 +59,7 @@ impl PrimVal {
             PrimVal::Bool(_) => NativeKind::Bool,
             PrimVal::Char(_) => NativeKind::Char,
             PrimVal::Unit => NativeKind::Unit,
+            PrimVal::String(_) => NativeKind::Unit, // String not yet native
         }
     }
 }
@@ -65,39 +67,52 @@ impl PrimVal {
 pub use operations::prim_name_to_op;
 
 pub static INTRINSICS_TABLE: &[&str] = &[
+    // Integer arithmetic
     "prim_iadd",
     "prim_isub",
     "prim_imul",
     "prim_idiv",
     "prim_irem",
     "prim_ineg",
+    // Float arithmetic
     "prim_fadd",
     "prim_fsub",
     "prim_fmul",
     "prim_fdiv",
     "prim_fneg",
+    // Integer comparison
     "prim_ieq",
     "prim_ifeq",
     "prim_igt",
     "prim_ige",
     "prim_ilt",
     "prim_ile",
+    // Float comparison
     "prim_feq",
     "prim_fne",
     "prim_fgt",
     "prim_fge",
     "prim_flt",
     "prim_fle",
+    // Boolean
     "prim_not",
     "prim_and",
     "prim_or",
+    // Char
     "prim_chr",
     "prim_ord",
+    // Conversion to string
+    "prim_int_to_string",
+    "prim_float_to_string",
+    "prim_char_to_string",
+    // IO operations
     "prim_print",
     "prim_read_line",
     "prim_open_file",
     "prim_close_file",
     "prim_file_write",
+    "prim_io_pure",
+    "prim_io_bind",
 ];
 
 pub fn is_valid_primitive(name: &str) -> bool {

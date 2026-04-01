@@ -31,12 +31,22 @@ pub enum PrimOp {
     Or,
     Chr,
     Ord,
+    IntToString,
+    FloatToString,
+    CharToString,
 }
 
 impl PrimOp {
     pub fn arity(&self) -> usize {
         match self {
-            PrimOp::INeg | PrimOp::FNeg | PrimOp::Not | PrimOp::Chr | PrimOp::Ord => 1,
+            PrimOp::INeg
+            | PrimOp::FNeg
+            | PrimOp::Not
+            | PrimOp::Chr
+            | PrimOp::Ord
+            | PrimOp::IntToString
+            | PrimOp::FloatToString
+            | PrimOp::CharToString => 1,
             _ => 2,
         }
     }
@@ -273,6 +283,27 @@ impl PrimOp {
                 }
                 None
             }
+            PrimOp::IntToString => {
+                let a = args.first()?;
+                if let PrimVal::Int(n) = a {
+                    return Some(PrimVal::String(format!("{}", n)));
+                }
+                None
+            }
+            PrimOp::FloatToString => {
+                let a = args.first()?;
+                if let PrimVal::Float(f) = a {
+                    return Some(PrimVal::String(format!("{}", f)));
+                }
+                None
+            }
+            PrimOp::CharToString => {
+                let a = args.first()?;
+                if let PrimVal::Char(c) = a {
+                    return Some(PrimVal::String(c.to_string()));
+                }
+                None
+            }
         }
     }
 }
@@ -307,6 +338,9 @@ pub fn prim_name_to_op(name: &str) -> Option<PrimOp> {
         "prim_or" => Some(PrimOp::Or),
         "prim_chr" => Some(PrimOp::Chr),
         "prim_ord" => Some(PrimOp::Ord),
+        "prim_int_to_string" => Some(PrimOp::IntToString),
+        "prim_float_to_string" => Some(PrimOp::FloatToString),
+        "prim_char_to_string" => Some(PrimOp::CharToString),
         _ => None,
     }
 }

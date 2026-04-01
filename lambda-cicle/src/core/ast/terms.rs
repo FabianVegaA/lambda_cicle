@@ -164,11 +164,13 @@ pub enum Decl {
         visibility: Visibility,
         name: String,
         params: Vec<String>,
+        supertrait: Option<(TraitName, Vec<String>)>,
         methods: Vec<MethodSig>,
     },
     ImplDecl {
         ty: Type,
         trait_name: TraitName,
+        constraints: Vec<super::Constraint>,
         methods: Vec<MethodDef>,
     },
     UseDecl {
@@ -187,7 +189,14 @@ pub struct MethodSig {
 #[derive(Debug, Clone, PartialEq)]
 pub struct MethodDef {
     pub name: MethodName,
+    pub ty: Type,
     pub term: Box<Term>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Constraint {
+    pub trait_name: TraitName,
+    pub ty: Type,
 }
 
 #[derive(Debug, Clone, PartialEq)]
