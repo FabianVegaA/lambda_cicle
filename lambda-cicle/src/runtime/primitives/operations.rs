@@ -344,3 +344,18 @@ pub fn prim_name_to_op(name: &str) -> Option<PrimOp> {
         _ => None,
     }
 }
+
+pub fn prim_name_to_io_op(name: &str) -> Option<IOOp> {
+    match name {
+        "prim_io_print" => Some(IOOp::Print),
+        "prim_io_println" => Some(IOOp::Println),
+        "prim_io_eprint" => Some(IOOp::EPrint),
+        "prim_io_eprintln" => Some(IOOp::EPrintln),
+        "prim_io_read_line" => Some(IOOp::ReadLine),
+        "prim_io_open" => Some(IOOp::Open),
+        "prim_io_close" => Some(IOOp::Close),
+        "prim_io_read" => Some(IOOp::Read),
+        "prim_io_write" => Some(IOOp::Write),
+        _ => None,
+    }
+}

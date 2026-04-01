@@ -1,6 +1,13 @@
 use lambda_cicle::core::parser::parse_program;
 
 #[test]
+fn test_sum_type() {
+    let result = parse_program("pub type Bool (..) = True | False");
+    println!("Sum type error: {:?}", result.as_ref().err());
+    assert!(result.is_ok());
+}
+
+#[test]
 fn test_impl_trait_for_type() {
     let result = parse_program("impl Eq for Int {}");
     assert!(result.is_ok());
@@ -52,7 +59,7 @@ fn test_map_type() {
 
 #[test]
 fn test_trait_with_supertrait() {
-    let result = parse_program("pub trait Ord a where Eq { val compare : a -> a -> Ordering }");
+    let result = parse_program("pub trait Ord a where Eq a { val compare : a -> a -> Ordering }");
     assert!(result.is_ok());
 }
 

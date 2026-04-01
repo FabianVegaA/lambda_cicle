@@ -26,23 +26,26 @@ pub val read : &File -> IO (Result String IOError) = prim_io_read
 pub val write : &File -> &String -> IO (Result Unit IOError) = prim_io_write
 
 -- Monad IO
+-- bind : IO a -> (a -> IO b) -> IO b
+-- bind m f = \token. let (token', a) = m token in f a token'
+-- pure x = \token. (token, x)
 impl Functor for IO with fmap = \f : a -> b. \io : IO a. bind io (\x : a. pure (f x))
 impl Applicative for IO with
-    pure = prim_io_pure
+    pure = \x : a. \token : 1:Unit. (token, x)
     apply = \iof : IO (a -> b). \iox : IO a. bind iof (\f : a -> b. fmap f iox)
 impl Monad for IO with
-    bind = prim_io_bind
+    bind = \m : IO a. \f : a -> IO b. \token : 1:Unit. (token, ())
     then = \x : IO a. \y : IO b. bind x (\_:a. y)
 
 -- IOError impls
 impl Show IOError with show = \e : &IOError.
-    match e with { NotFound -> "File not found"
-        | PermissionDenied -> "Permission denied"
-        | UnexpectedEOF -> "Unexpected end of file"
-        | Other s -> s }
+    match e with { NotFound => "File not found"
+        | PermissionDenied => "Permission denied"
+        | UnexpectedEOF => "Unexpected end of file"
+        | Other s => s }
 
 impl Eq IOError with eq = \e1 : &IOError. \e2 : &IOError.
-    match e1 with { NotFound -> match e2 with { NotFound -> true | _ -> false }
-        | PermissionDenied -> match e2 with { PermissionDenied -> true | _ -> false }
-        | UnexpectedEOF -> match e2 with { UnexpectedEOF -> true | _ -> false }
-        | Other s1 -> match e2 with { Other s2 -> eq s1 s2 | _ -> false } }
+    match e1 with { NotFound => match e2 with { NotFound => true | _ => false }
+        | PermissionDenied => match e2 with { PermissionDenied => true | _ => false }
+        | UnexpectedEOF => match e2 with { UnexpectedEOF => true | _ => false }
+        | Other s1 => match e2 with { Other s2 => eq s1 s2 | _ => false } }

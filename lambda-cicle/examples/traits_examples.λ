@@ -1,0 +1,80 @@
+-- Traits Examples - Demonstrates trait polymorphism and implementations
+-- Layer 1 (Prelude)
+
+use Std.Prelude
+use Std.List
+
+-- Custom type: RGB Color
+pub type Color (..) = Red | Green | Blue | RGB Int Int Int
+
+-- Implement Eq for Color
+impl Eq Color with eq = \c1 : &Color. \c2 : &Color.
+    match c1 with { 
+        Red => match c2 with { Red => True | _ => False }
+        | Green => match c2 with { Green => True | _ => False }
+        | Blue => match c2 with { Blue => True | _ => False }
+        | RGB r1 g1 b1 =>
+            match c2 with { 
+                RGB r2 g2 b2 => 
+                    and (eq r1 r2) 
+                        (and (eq g1 g2) (eq b1 b2))
+                | _ => False } }
+
+-- Implement Ord for Color (alphabetical order)
+impl Ord Color with compare = \c1 : &Color. \c2 : &Color.
+    match c1 with { 
+        Red => match c2 with { Red => EQ | Green => GT | Blue => GT | RGB _ _ _ => GT }
+        | Green => match c2 with { Red => LT | Green => EQ | Blue => GT | RGB _ _ _ => GT }
+        | Blue => match c2 with { Red => LT | Green => LT | Blue => EQ | RGB _ _ _ => GT }
+        | RGB _ _ _ => match c2 with { RGB _ _ _ => EQ | _ => LT } }
+
+-- Custom pair type
+pub type Pair a b (..) = Pair a b
+
+-- Implement Eq for Pair (requires Eq for both components)
+impl (Eq a, Eq b) => Eq (Pair a b) with eq = \p1 : &(Pair a b). \p2 : &(Pair a b).
+    match p1 with { Pair x1 y1 =>
+        match p2 with { Pair x2 y2 =>
+            and (eq x1 x2) (eq y1 y2) } }
+
+-- Custom list wrapper
+pub type Stack a (..) = EmptyStack | Push a (Stack a)
+
+-- Check if stack is empty
+val is_empty_stack : Stack Int -> Bool = \s : Stack Int.
+    match s with { EmptyStack => True | Push _ _ => False }
+
+-- Peek at top of stack
+val peek : Stack Int -> Option Int = \s : Stack Int.
+    match s with { EmptyStack => None | Push x _ => Some x }
+
+-- Generic identity function using trait bound
+val identity : a -> a = \x : a. x
+
+-- Generic constant function
+val const : a -> b -> a = \x : a. \y : b. x
+
+-- Polymorphic list length (works with any type)
+val generic_length : List a -> Int = \lst : List a.
+    match lst with { Nil => 0 | Cons _ t => add 1 (generic_length t) }
+
+-- Using trait methods on Option
+val safe_square : Int -> Option Int = \n : Int.
+    match div n n with { Err _ => None | Ok v => Some (mul v v) }
+
+-- Using Eq trait
+val colors : List Color = Cons Red (Cons Green (Cons Blue Nil))
+val same_colors : Bool = eq (head colors) (Some Red)
+
+-- Using Ord trait
+val sorted_colors : List Color = Cons Red (Cons Green (Cons Blue Nil))
+
+-- Polymorphic function using Eq
+val list_contains : (&a -> &a -> Bool) -> &a -> List a -> Bool = 
+    \eq_fn : &a -> &a -> Bool. \target : &a. \lst : &(List a).
+    match lst with { Nil => False
+        | Cons h t => 
+            match eq_fn target h with { True => True | False => list_contains eq_fn target t } }
+
+-- Main expression
+42

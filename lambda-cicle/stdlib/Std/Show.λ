@@ -8,17 +8,17 @@ pub trait Show a where
 
 impl Show Int with show = prim_int_to_string
 impl Show Float with show = prim_float_to_string
-impl Show Bool with show = \b : &Bool. match b with { true -> "true" | false -> "false" }
+impl Show Bool with show = \b : &Bool. match b with { true => "true" | false => "false" }
 impl Show Char with show = prim_char_to_string
 impl Show Unit with show = \_ : &Unit. "Unit"
 
 impl Show (Option a) where Show a with show = \opt : &(Option a).
-    match opt with { None -> "None" | Some x -> append "Some (" (append (show x) ")") }
+    match opt with { None => "None" | Some x => append "Some (" (append (show x) ")") }
 
 impl Show (Result a e) where Show a, Show e with show = \r : &(Result a e).
-    match r with { Err e -> append "Err (" (append (show e) ")") | Ok a -> append "Ok (" (append (show a) ")") }
+    match r with { Err e => append "Err (" (append (show e) ")") | Ok a => append "Ok (" (append (show a) ")") }
 
 impl Show String with show = \s : &String. s
 
 impl Show Ordering with show = \o : &Ordering.
-    match o with { LT -> "LT" | EQ -> "EQ" | GT -> "GT" }
+    match o with { LT => "LT" | EQ => "EQ" | GT => "GT" }

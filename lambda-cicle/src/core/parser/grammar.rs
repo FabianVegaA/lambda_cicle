@@ -1,4 +1,5 @@
 use super::lexer::Token;
+use crate::core::ast::terms::Constructor;
 use crate::core::ast::{
     Arm, Constraint, Decl, Literal, MethodDef, MethodName, MethodSig, Multiplicity, Pattern, Term,
     TraitName, Type, UseMode, Visibility,
@@ -73,29 +74,40 @@ impl<'a> Parser<'a> {
     }
 
     fn type_decl(&mut self, visibility_override: Option<Visibility>) -> Result<Decl, ParseError> {
+        let _is_explicit_visibility = visibility_override.is_some();
         let visibility = visibility_override
             .unwrap_or_else(|| self.parse_visibility().unwrap_or(Visibility::Private));
+
+        // Consume 'type' keyword - caller guarantees we're positioned at it
         self.consume(&Token::KwType)?;
+
         let name = self.expect_ident()?;
         let params = self.parse_type_params()?;
 
-        let (ty, transparent) = match self.peek() {
-            Some(&Token::LParen) => {
-                self.advance();
-                match self.peek() {
-                    Some(&Token::DotDot) => {
-                        self.advance();
-                        self.consume(&Token::RParen)?;
-                        (Type::unit(), true)
-                    }
-                    _ => return Err(ParseError::UnexpectedToken("expected ..".to_string())),
+        // Check for (..) - abstract type marker
+        let is_abstract = if matches!(self.peek(), Some(&Token::LParen)) {
+            self.advance();
+            match self.peek() {
+                Some(&Token::DotDot) => {
+                    self.advance();
+                    self.consume(&Token::RParen)?;
+                    true
                 }
+                _ => return Err(ParseError::UnexpectedToken("expected ..".to_string())),
             }
-            _ => {
-                self.consume(&Token::Equals)?;
-                let ty = self.ty()?;
-                (ty, false)
-            }
+        } else {
+            false
+        };
+
+        let (ty, transparent, constructors) = if matches!(self.peek(), Some(&Token::Equals)) {
+            self.advance();
+            self.parse_type_body()?
+        } else if is_abstract {
+            (Type::unit(), true, Vec::new())
+        } else {
+            return Err(ParseError::UnexpectedToken(
+                "expected = or (..)".to_string(),
+            ));
         };
 
         Ok(Decl::TypeDecl {
@@ -104,13 +116,82 @@ impl<'a> Parser<'a> {
             params,
             ty,
             transparent,
+            constructors,
         })
     }
 
+    fn parse_type_body(&mut self) -> Result<(Type, bool, Vec<Constructor>), ParseError> {
+        // Decide whether this is a sum-type (constructors) or a type alias (plain type expr).
+        // A sum type starts with an uppercase identifier (e.g. True, Cons, Nil).
+        // Everything else (lowercase var, `(`, native type keyword) is a type alias.
+        let is_sum_type = matches!(self.peek(), Some(Token::Ident(name)) if
+            name.chars().next().map(|c| c.is_uppercase()).unwrap_or(false));
+
+        if !is_sum_type {
+            // Type alias: parse as a full type expression (supports arrows, tuples, type apps)
+            let ty = self.ty()?;
+            return Ok((ty, false, Vec::new()));
+        }
+
+        // Sum type: parse one or more | -separated constructors
+        let mut constructors = Vec::new();
+
+        let first_constructor = self.parse_constructor()?;
+        constructors.push(first_constructor);
+
+        while matches!(self.peek(), Some(&Token::Pipe)) {
+            self.advance();
+            constructors.push(self.parse_constructor()?);
+        }
+
+        if constructors.len() == 1 {
+            // Single-constructor sum: treat as a newtype wrapper; body = first arg or Unit
+            let ctor = constructors.remove(0);
+            let ty = ctor.args.first().cloned().unwrap_or(Type::unit());
+            Ok((ty, false, Vec::new()))
+        } else {
+            let ty = self.build_sum_type(&constructors);
+            Ok((ty, false, constructors))
+        }
+    }
+
+    fn parse_constructor(&mut self) -> Result<Constructor, ParseError> {
+        let name = self.expect_ident()?;
+        let mut args = Vec::new();
+
+        while self.is_type_atom_start() || matches!(self.peek(), Some(Token::MultiplicityBorrow)) {
+            let arg_ty = self.ty_atom()?;
+            args.push(arg_ty);
+        }
+
+        Ok(Constructor { name, args })
+    }
+
+    fn build_sum_type(&self, constructors: &[Constructor]) -> Type {
+        if constructors.is_empty() {
+            return Type::unit();
+        }
+
+        let mut result = Type::unit();
+        for ctor in constructors.iter().rev() {
+            let ctor_type = if ctor.args.is_empty() {
+                Type::inductive(&ctor.name, vec![])
+            } else {
+                Type::inductive(&ctor.name, ctor.args.clone())
+            };
+            result = Type::sum(ctor_type, result);
+        }
+        result
+    }
+
     fn val_decl(&mut self, visibility_override: Option<Visibility>) -> Result<Decl, ParseError> {
+        let _is_explicit_visibility = visibility_override.is_some();
         let visibility = visibility_override
             .unwrap_or_else(|| self.parse_visibility().unwrap_or(Visibility::Private));
+
+        // Consume 'val' keyword - caller guarantees we're positioned at it
         self.consume(&Token::KwVal)?;
+
         let name = self.expect_ident()?;
         self.consume(&Token::Colon)?;
         let ty = self.ty()?;
@@ -125,23 +206,50 @@ impl<'a> Parser<'a> {
     }
 
     fn trait_decl(&mut self, visibility_override: Option<Visibility>) -> Result<Decl, ParseError> {
+        let _is_explicit_visibility = visibility_override.is_some();
         let visibility = visibility_override
             .unwrap_or_else(|| self.parse_visibility().unwrap_or(Visibility::Private));
+
+        // Consume 'trait' keyword - caller guarantees we're positioned at it
         self.consume(&Token::KwTrait)?;
         let name = self.expect_ident()?;
         let params = self.parse_type_params()?;
 
         let supertrait = if matches!(self.peek(), Some(&Token::KwWhere)) {
             self.advance();
-            let supertrait_name_str = self.expect_ident()?;
-            let supertrait_name = TraitName(supertrait_name_str);
-            let supertrait_params = self.parse_type_params()?;
-            Some((supertrait_name, supertrait_params))
+            // Check if next token is a supertrait name (uppercase) or val (method)
+            if matches!(self.peek(), Some(&Token::Ident(ref name)) if name.chars().next().map(|c| c.is_uppercase()).unwrap_or(false))
+            {
+                let supertrait_name_str = self.expect_ident()?;
+                let supertrait_name = TraitName(supertrait_name_str);
+                let supertrait_params = self.parse_type_params()?;
+                Some((supertrait_name, supertrait_params))
+            } else {
+                None
+            }
         } else {
             None
         };
 
         let mut methods = Vec::new();
+
+        // Parse method signatures - either inline after supertrait or in body {}
+        while matches!(self.peek(), Some(&Token::KwVal)) {
+            self.advance();
+            let method_name_str = self.expect_ident()?;
+            self.consume(&Token::Colon)?;
+            let method_ty = self.ty()?;
+            // Skip optional default implementation
+            if matches!(self.peek(), Some(&Token::Equals)) {
+                self.advance();
+                let _default_term = self.term()?;
+            }
+            methods.push(MethodSig {
+                name: MethodName(method_name_str),
+                ty: method_ty,
+            });
+        }
+
         if matches!(self.peek(), Some(&Token::LBrace)) {
             self.consume(&Token::LBrace)?;
             while !matches!(self.peek(), Some(&Token::RBrace)) {
@@ -152,6 +260,11 @@ impl<'a> Parser<'a> {
                 let method_name_str = self.expect_ident()?;
                 self.consume(&Token::Colon)?;
                 let method_ty = self.ty()?;
+                // Skip optional default implementation
+                if matches!(self.peek(), Some(&Token::Equals)) {
+                    self.advance();
+                    let _default_term = self.term()?;
+                }
                 methods.push(MethodSig {
                     name: MethodName(method_name_str),
                     ty: method_ty,
@@ -175,51 +288,161 @@ impl<'a> Parser<'a> {
     fn impl_decl(&mut self) -> Result<Decl, ParseError> {
         self.consume(&Token::KwImpl)?;
 
+        // Support three syntax forms:
+        //   impl Trait for Type [where ...] [with ...]
+        //   impl Trait Type [where ...] [with ...]          (no 'for')
+        //   impl (C1, C2) => Trait Type [where ...] [with ...]  (prefix constraints)
+
+        // Check for prefix constraint syntax: impl (Eq a, Eq b) => ...
+        let prefix_constraints: Vec<Constraint> = if matches!(self.peek(), Some(&Token::LParen)) {
+            // Peek ahead to decide: is this a constraint list or a parenthesised type?
+            // Heuristic: if the content of the parens looks like "TraitName typevar",
+            // treat it as constraints. We consume tentatively.
+            self.advance(); // consume '('
+            if matches!(self.peek(), Some(&Token::RParen)) {
+                // empty parens — unusual, treat as no constraints
+                self.advance();
+                Vec::new()
+            } else {
+                let mut cs = Vec::new();
+                loop {
+                    let trait_str = self.expect_ident()?;
+                    let cty = self.ty_atom()?;
+                    cs.push(Constraint {
+                        trait_name: TraitName(trait_str),
+                        ty: cty,
+                    });
+                    if matches!(self.peek(), Some(&Token::Comma)) {
+                        self.advance();
+                    } else {
+                        break;
+                    }
+                }
+                self.consume(&Token::RParen)?;
+                // Must be followed by '=>'
+                if matches!(self.peek(), Some(&Token::FatArrow)) {
+                    self.advance(); // consume '=>'
+                    cs
+                } else {
+                    return Err(ParseError::UnexpectedToken(
+                        "expected '=>' after impl constraints".to_string(),
+                    ));
+                }
+            }
+        } else {
+            Vec::new()
+        };
+
         let trait_name_str = self.expect_ident()?;
         let trait_name = TraitName(trait_name_str);
 
-        match self.peek() {
-            Some(Token::Ident(name)) if name == "for" => {
-                self.advance();
-            }
-            _ => {
-                return Err(ParseError::UnexpectedToken("expected 'for'".to_string()));
-            }
+        // Optional 'for' keyword
+        if matches!(self.peek(), Some(Token::Ident(name)) if name == "for") {
+            self.advance();
         }
 
         let ty = self.ty()?;
 
-        let constraints = if matches!(self.peek(), Some(&Token::KwWhere)) {
+        let mut constraints = if matches!(self.peek(), Some(&Token::KwWhere)) {
             self.advance();
             self.parse_constraints()?
         } else {
             Vec::new()
         };
+        constraints.extend(prefix_constraints);
 
-        self.consume(&Token::LBrace)?;
         let mut methods = Vec::new();
 
-        while !matches!(self.peek(), Some(&Token::RBrace)) {
-            self.consume(&Token::KwVal)?;
+        // Check for 'with' keyword for inline methods
+        if matches!(self.peek(), Some(&Token::KwWith)) {
+            self.advance();
+            loop {
+                // Break if we hit a new declaration
+                match self.peek() {
+                    Some(&Token::KwImpl)
+                    | Some(&Token::KwType)
+                    | Some(&Token::KwVal)
+                    | Some(&Token::KwTrait)
+                    | Some(&Token::EOF)
+                    | None => break,
+                    Some(&Token::RBrace) => {
+                        self.advance();
+                        break;
+                    }
+                    _ => {}
+                }
 
-            let method_name_str = self.expect_ident()?;
-            self.consume(&Token::Colon)?;
-            let method_ty = self.ty()?;
-            self.consume(&Token::Equals)?;
-            let term = Box::new(self.term()?);
+                // Skip optional 'val' keyword
+                let method_name = if matches!(self.peek(), Some(&Token::KwVal)) {
+                    self.advance();
+                    self.expect_ident()?
+                } else if matches!(self.peek(), Some(&Token::Ident(_))) {
+                    self.expect_ident()?
+                } else {
+                    break;
+                };
 
-            methods.push(MethodDef {
-                name: MethodName(method_name_str),
-                ty: method_ty,
-                term,
-            });
+                let method_ty = if matches!(self.peek(), Some(&Token::Colon)) {
+                    self.advance();
+                    self.ty()?
+                } else {
+                    Type::unit()
+                };
 
-            if matches!(self.peek(), Some(&Token::Comma)) {
-                self.advance();
+                if matches!(self.peek(), Some(&Token::Equals)) {
+                    self.advance();
+                    let term = Box::new(self.term()?);
+                    methods.push(MethodDef {
+                        name: MethodName(method_name),
+                        ty: method_ty,
+                        term,
+                    });
+                } else {
+                    methods.push(MethodDef {
+                        name: MethodName(method_name),
+                        ty: method_ty,
+                        term: Box::new(Term::NativeLiteral(crate::core::ast::Literal::Unit)),
+                    });
+                }
+
+                // Check for comma
+                if matches!(self.peek(), Some(&Token::Comma)) {
+                    self.advance();
+                    continue;
+                }
+                // Continue if next token looks like a method
+                match self.peek() {
+                    Some(&Token::Ident(_)) | Some(&Token::KwVal) => continue,
+                    _ => break,
+                }
             }
         }
 
-        self.consume(&Token::RBrace)?;
+        // Check for '{' for block methods
+        if matches!(self.peek(), Some(&Token::LBrace)) {
+            self.consume(&Token::LBrace)?;
+            while !matches!(self.peek(), Some(&Token::RBrace)) {
+                self.consume(&Token::KwVal)?;
+
+                let method_name_str = self.expect_ident()?;
+                self.consume(&Token::Colon)?;
+                let method_ty = self.ty()?;
+                self.consume(&Token::Equals)?;
+                let term = Box::new(self.term()?);
+
+                methods.push(MethodDef {
+                    name: MethodName(method_name_str),
+                    ty: method_ty,
+                    term,
+                });
+
+                if matches!(self.peek(), Some(&Token::Comma)) {
+                    self.advance();
+                }
+            }
+            self.consume(&Token::RBrace)?;
+        }
+
         Ok(Decl::ImplDecl {
             ty,
             trait_name,
@@ -344,6 +567,7 @@ impl<'a> Parser<'a> {
                 | Some(Token::FloatLit(_))
                 | Some(Token::BoolLit(_))
                 | Some(Token::CharLit(_))
+                | Some(Token::StringLit(_))
                 | Some(Token::UnitLit)
                 | Some(Token::KwTrue)
                 | Some(Token::KwFalse)
@@ -372,6 +596,11 @@ impl<'a> Parser<'a> {
                 self.advance();
                 Ok(Term::literal(Literal::Char(val)))
             }
+            Some(Token::StringLit(s)) => {
+                let val = s.clone();
+                self.advance();
+                Ok(Term::literal(Literal::Str(val)))
+            }
             Some(Token::UnitLit) => {
                 self.advance();
                 Ok(Term::literal(Literal::Unit))
@@ -379,6 +608,14 @@ impl<'a> Parser<'a> {
             Some(Token::KwUnit) => {
                 self.advance();
                 Ok(Term::literal(Literal::Unit))
+            }
+            Some(Token::KwTrue) => {
+                self.advance();
+                Ok(Term::Constructor("True".to_string(), Vec::new()))
+            }
+            Some(Token::KwFalse) => {
+                self.advance();
+                Ok(Term::Constructor("False".to_string(), Vec::new()))
             }
             Some(Token::Ident(name)) => {
                 let name = name.clone();
@@ -431,9 +668,17 @@ impl<'a> Parser<'a> {
                     Multiplicity::Omega
                 }
                 Some(Token::MultiplicityBorrow) => {
-                    self.advance();
-                    self.consume(&Token::Colon)?;
-                    Multiplicity::Borrow
+                    // & is a multiplicity annotation only when followed by ':'
+                    // e.g. \x : & : Bool  (multiplicity borrow)
+                    // vs   \x : &Bool     (borrow type, & is part of the type)
+                    if matches!(self.tokens.get(self.pos + 1), Some(&Token::Colon)) {
+                        self.advance(); // consume &
+                        self.consume(&Token::Colon)?; // consume :
+                        Multiplicity::Borrow
+                    } else {
+                        // & starts a borrow type, not a multiplicity
+                        Multiplicity::One
+                    }
                 }
                 Some(Token::IntLit(n)) => {
                     self.advance();
@@ -503,9 +748,15 @@ impl<'a> Parser<'a> {
                     Multiplicity::Omega
                 }
                 Some(Token::MultiplicityBorrow) => {
-                    self.advance();
-                    self.consume(&Token::Colon)?;
-                    Multiplicity::Borrow
+                    // & is a multiplicity annotation only when followed by ':'
+                    if matches!(self.tokens.get(self.pos + 1), Some(&Token::Colon)) {
+                        self.advance(); // consume &
+                        self.consume(&Token::Colon)?; // consume :
+                        Multiplicity::Borrow
+                    } else {
+                        // & starts a borrow type, not a multiplicity
+                        Multiplicity::One
+                    }
                 }
                 Some(Token::IntLit(n)) => {
                     // Handle number as multiplicity (0 or 1)
@@ -664,15 +915,7 @@ impl<'a> Parser<'a> {
     fn ty_app(&mut self) -> Result<Type, ParseError> {
         let mut ty = self.ty_atom()?;
 
-        while matches!(self.peek(), Some(&Token::Ident(_)))
-            || matches!(self.peek(), Some(&Token::TyInt))
-            || matches!(self.peek(), Some(&Token::TyFloat))
-            || matches!(self.peek(), Some(&Token::TyBool))
-            || matches!(self.peek(), Some(&Token::TyChar))
-            || matches!(self.peek(), Some(&Token::KwUnit))
-            || matches!(self.peek(), Some(&Token::LParen))
-            || matches!(self.peek(), Some(&Token::MultiplicityBorrow))
-        {
+        while self.is_type_atom_start() {
             let arg = self.ty_atom()?;
             ty = match &ty {
                 Type::Inductive(name, args) => {
@@ -697,6 +940,17 @@ impl<'a> Parser<'a> {
         Ok(ty)
     }
 
+    fn is_type_atom_start(&self) -> bool {
+        matches!(
+            self.peek(),
+            Some(&Token::TyInt)
+                | Some(&Token::TyFloat)
+                | Some(&Token::TyChar)
+                | Some(&Token::KwUnit)
+                | Some(&Token::LParen)
+        ) || matches!(self.peek(), Some(&Token::Ident(_)))
+    }
+
     fn ty_atom(&mut self) -> Result<Type, ParseError> {
         match self.peek() {
             Some(Token::KwUnit) => {
@@ -710,10 +964,6 @@ impl<'a> Parser<'a> {
             Some(Token::TyFloat) => {
                 self.advance();
                 Ok(Type::float())
-            }
-            Some(Token::TyBool) => {
-                self.advance();
-                Ok(Type::bool())
             }
             Some(Token::TyChar) => {
                 self.advance();
@@ -786,7 +1036,11 @@ impl<'a> Parser<'a> {
             Some(Token::Ident(name)) => {
                 let name = name.clone();
                 self.advance();
-                if name
+                if name == "true" {
+                    Ok(Pattern::Constructor("True".to_string(), Vec::new()))
+                } else if name == "false" {
+                    Ok(Pattern::Constructor("False".to_string(), Vec::new()))
+                } else if name
                     .chars()
                     .next()
                     .map(|c| c.is_lowercase())
@@ -797,6 +1051,14 @@ impl<'a> Parser<'a> {
                     let args = self.pattern_args()?;
                     Ok(Pattern::Constructor(name, args))
                 }
+            }
+            Some(Token::KwTrue) => {
+                self.advance();
+                Ok(Pattern::Constructor("True".to_string(), Vec::new()))
+            }
+            Some(Token::KwFalse) => {
+                self.advance();
+                Ok(Pattern::Constructor("False".to_string(), Vec::new()))
             }
             Some(Token::LParen) => self.pattern_parens(),
             _ => Err(ParseError::UnexpectedToken("expected pattern".to_string())),
@@ -853,10 +1115,6 @@ impl<'a> Parser<'a> {
             Some(Token::TyFloat) => {
                 self.advance();
                 Ok("Float".to_string())
-            }
-            Some(Token::TyBool) => {
-                self.advance();
-                Ok("Bool".to_string())
             }
             Some(Token::TyChar) => {
                 self.advance();

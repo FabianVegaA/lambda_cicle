@@ -557,6 +557,54 @@ The wrapper cost (two β-reductions to unwrap `add`) is paid once per call site.
 actual primitive computation fires in a single interaction rule. For `ω`-shared
 functions the δ-agent duplicates the wrapper graph, not the result.
 
+**Translation of IO intrinsic calls** differs from arithmetic in one critical way: the
+translator maintains a **current `IO_token` wire** as part of its state. Each
+`prim_io_*` call consumes the current token wire and produces a fresh one, which
+becomes the new current token for the next call.
+
+```
+-- Translation state carries: current_token_wire
+
+translate(prim_io_println s, state):
+  node ← PrimIO(Println) with:
+    token_in  ← state.current_token_wire   -- consume current token
+    aux       ← translate(s)
+    principal → (token_out, result_wire)   -- produce fresh token + result
+  state.current_token_wire ← token_out    -- advance token for next IO call
+  return result_wire                       -- IO Unit result
+
+translate(prim_io_read_line, state):
+  node ← PrimIO(ReadLine) with:
+    token_in  ← state.current_token_wire
+    principal → (token_out, result_wire)   -- IO (Result String IOError)
+  state.current_token_wire ← token_out
+  return result_wire
+
+translate(prim_io_close f, state):
+  node ← PrimIO(Close) with:
+    token_in  ← state.current_token_wire
+    aux       ← translate(f)              -- File value, consumed linearly
+    principal → (token_out, result_wire)
+  state.current_token_wire ← token_out
+  return result_wire
+```
+
+**`bind` in the `Monad IO` instance is the thread.** The `bind` implementation for
+`IO` desugars to sequential token threading: the token output of the first action
+becomes the token input of the continuation. The translator sees `bind` chains as
+sequences of `prim_io_*` calls with the token wire connecting them automatically.
+
+```
+-- bind (println "a") (λ_. println "b") translates to:
+
+PrimIO(Println)[token=T0, aux=PrimVal(String,"a")] → (T1, Unit)
+PrimIO(Println)[token=T1, aux=PrimVal(String,"b")] → (T2, Unit)
+
+-- T0 is the runtime-provided initial token
+-- T1 gates the second println — it cannot fire until the first completes
+-- T2 is the final token returned by main
+```
+
 ---
 
 ## 7. Concurrency Safety (S5′)
@@ -976,7 +1024,7 @@ compiled through the same pipeline as user code.
 32. ✅ **Primitive evaluation model** — Options A+C: `Prim(op)` and `PrimVal` agents in the net (A); user code reaches them only through `prim_*` intrinsic wrappers in the prelude (C)
 33. ✅ **PrimVal payload** — typed: `PrimVal(Int, 42)` — redundant for correct programs but required for debugging and translator validation
 34. ✅ **Prim agent arity** — fixed per operation: 3-port for binary ops, 2-port for unary ops; matches hardware structure, avoids double-firing overhead
-35. ✅ **Intrinsics set** — 30 intrinsics, closed and final for v1.0; any `prim_*` name not in the table is `UnknownPrimitive` at Gate 5
+35. ✅ **Intrinsics set** — 39 intrinsics total (30 arithmetic + 9 IO); closed and final for v1.0; any `prim_*` name not in the table is `UnknownPrimitive` at Gate 5
 36. ✅ **Hybrid evaluator eliminated** — uniform evaluator loop handles `Prim ⋈ PrimVal` rules identically to `λ ⋈ @`; no special arithmetic evaluation mode
 37. ✅ **IO is a monad** — `IO a` describes an effectful computation; no capability threading in user code
 38. ✅ **IO location** — `IO` type + `Monad IO` instance + all operations in `Std.IO`; orphan rule satisfied
@@ -984,6 +1032,7 @@ compiled through the same pipeline as user code.
 40. ✅ **IO sequencing** — internal `IO_token` linear agent threads through `PrimIO` rules; sequencing enforced by data dependency in the net, not by a scheduler
 41. ✅ **`do`-notation** — deferred to v1.1; v1.0 uses explicit `bind` and `then`
 42. ✅ **File linearity** — `File` is linear; `close` is the only consumer; forgetting to close is a compile-time `LinearityViolation`
+43. ✅ **`prim_io_*` wire-up** — 9 IO intrinsics defined in §16.3.2 with full table; translator threads `IO_token` wire through each `prim_io_*` call; `bind` in `Monad IO` desugars to sequential token threading
 
 ### Open (deferred to v2.0)
 - **FFI** — Interfacing with native code
@@ -1023,7 +1072,8 @@ compiled through the same pipeline as user code.
 | Prim agents in the net (Option A+C) | Uniform evaluator loop; no hybrid evaluation mode; net is the sole semantic model |
 | PrimVal carries type tag | Redundant for correct programs but enables debugging and translator validation |
 | Fixed arity for Prim agents | Efficient: binary ops fire in one rule; matches hardware; avoids double-firing overhead |
-| 30 intrinsics, closed set | Prevents user code from forging primitives; all ops reachable through trait wrappers |
+| 30 arithmetic + 9 IO intrinsics, closed set | Prevents user code from forging primitives; arithmetic and IO clearly separated by agent class |
+| IO intrinsics use IO_token port, arithmetic do not | Arithmetic is pure and parallelisable; IO is sequenced by data dependency — same evaluator loop, different port structure |
 | IO is a monad, not a capability | Cleaner composition; no explicit IO threading in user code; established functional language model |
 | Functor/Applicative/Monad in prelude | Option and Result become monads for free; IO monad instance in Std.IO satisfies orphan rule |
 | IO_token internal, not surface | User sees clean `IO a` type; sequencing enforced by net data dependency without exposing the token |
@@ -1490,10 +1540,20 @@ in `Std.Show` (see §16.6).
 > an `UnknownPrimitive` error at Gate 5 unless the name is in the table below.
 
 The closed intrinsics set is the bridge between the trait method surface (§16.2) and
-the `Prim(op)` / `PrimVal` agents in the interaction net (§6.1). Each arithmetic or
-comparison trait method in the prelude is a thin wrapper over exactly one intrinsic.
+the `Prim(op)` / `PrimVal` agents and the `PrimIO(op)` / `IO_token` agents in the
+interaction net (§6.1). It is divided into two groups:
 
-#### Integer intrinsics (30 total)
+- **§16.3.1 — Arithmetic intrinsics** (30): pure, order-independent, emit `Prim` agents
+- **§16.3.2 — IO intrinsics** (9): effectful, order-enforced by `IO_token`, emit `PrimIO` agents
+
+**Total: 39 intrinsics.** This set is closed and final for v1.0.
+
+### 16.3.1 Arithmetic Intrinsics
+
+**Pure — order-independent — emit `Prim` agents.** These intrinsics can fire in any
+order, including in parallel. The result is always deterministic.
+
+#### Integer
 
 | Intrinsic | Arity | Agent | Prelude wrapper | Result type |
 |-----------|-------|-------|-----------------|-------------|
@@ -1510,7 +1570,7 @@ comparison trait method in the prelude is a thin wrapper over exactly one intrin
 | `prim_ige` | binary | `Prim(IGe)` | `Ord.gte : &Int -> &Int -> Bool` | `Bool` |
 | `prim_ihash` | unary | `Prim(IHash)` | `Hash.hash : &Int -> Int` | `Int` |
 
-#### Float intrinsics
+#### Float
 
 | Intrinsic | Arity | Agent | Prelude wrapper | Result type |
 |-----------|-------|-------|-----------------|-------------|
@@ -1526,7 +1586,7 @@ comparison trait method in the prelude is a thin wrapper over exactly one intrin
 | `prim_fle` | binary | `Prim(FLe)` | `Ord.lte : &Float -> &Float -> Bool` | `Bool` |
 | `prim_fge` | binary | `Prim(FGe)` | `Ord.gte : &Float -> &Float -> Bool` | `Bool` |
 
-#### Bool intrinsics
+#### Bool
 
 | Intrinsic | Arity | Agent | Prelude wrapper | Result type |
 |-----------|-------|-------|-----------------|-------------|
@@ -1536,7 +1596,7 @@ comparison trait method in the prelude is a thin wrapper over exactly one intrin
 | `prim_beq` | binary | `Prim(BEq)` | `Eq.eq : &Bool -> &Bool -> Bool` | `Bool` |
 | `prim_bhash` | unary | `Prim(BHash)` | `Hash.hash : &Bool -> Int` | `Int` |
 
-#### Char intrinsics
+#### Char
 
 | Intrinsic | Arity | Agent | Prelude wrapper | Result type |
 |-----------|-------|-------|-----------------|-------------|
@@ -1544,9 +1604,7 @@ comparison trait method in the prelude is a thin wrapper over exactly one intrin
 | `prim_cord` | unary | `Prim(COrd)` | `Ord.compare : &Char -> &Char -> Ordering` | `Ordering` |
 | `prim_chash` | unary | `Prim(CHash)` | `Hash.hash : &Char -> Int` | `Int` |
 
-**Total: 30 intrinsics.** This set is **closed and final for v1.0**. No new intrinsics
-can be added without a language version bump. User code that attempts to call an
-undeclared `prim_*` name receives `UnknownPrimitive` at Gate 5.
+**Subtotal: 30 arithmetic intrinsics.**
 
 **Example — how `add 3 5` evaluates end-to-end:**
 
@@ -1573,6 +1631,72 @@ PrimVal(Int, 8)
 
 The evaluator loop is uniform throughout — steps 5 and 6 use the same "find active
 pair, fire rule" mechanism. No special cases.
+
+### 16.3.2 IO Intrinsics
+
+**Effectful — order-enforced by `IO_token` — emit `PrimIO` agents.** Unlike arithmetic
+intrinsics, IO intrinsics are not pure. Their firing order is determined by the
+`IO_token` linear chain: each `PrimIO` agent consumes the incoming token and produces a
+fresh one, forcing sequential execution through data dependency. The parallel evaluator
+cannot reorder IO actions because the next action's token input depends on the previous
+action's token output.
+
+These intrinsics are the bridge between `Std.IO` wrapper functions (§16.8) and the
+`PrimIO(op)` agents in the net (§6.1). They are emitted by the net translator when it
+encounters a `prim_io_*` call inside a `Std.IO` definition.
+
+| Intrinsic | Arity | Agent | `Std.IO` wrapper | Result type |
+|-----------|-------|-------|-----------------|-------------|
+| `prim_io_print` | unary | `PrimIO(Print)` | `print : &String -> IO Unit` | `IO Unit` |
+| `prim_io_println` | unary | `PrimIO(Println)` | `println : &String -> IO Unit` | `IO Unit` |
+| `prim_io_eprint` | unary | `PrimIO(EPrint)` | `eprint : &String -> IO Unit` | `IO Unit` |
+| `prim_io_eprintln` | unary | `PrimIO(EPrintln)` | `eprintln : &String -> IO Unit` | `IO Unit` |
+| `prim_io_read_line` | nullary | `PrimIO(ReadLine)` | `read_line : IO (Result String IOError)` | `IO (Result String IOError)` |
+| `prim_io_open` | unary | `PrimIO(Open)` | `open : &String -> IO (Result File IOError)` | `IO (Result File IOError)` |
+| `prim_io_close` | unary | `PrimIO(Close)` | `close : File ->¹ IO Unit` | `IO Unit` |
+| `prim_io_read` | unary | `PrimIO(Read)` | `read : &File -> IO (Result String IOError)` | `IO (Result String IOError)` |
+| `prim_io_write` | binary | `PrimIO(Write)` | `write : &File -> &String -> IO (Result Unit IOError)` | `IO (Result Unit IOError)` |
+
+**Subtotal: 9 IO intrinsics. Grand total: 39 intrinsics.**
+
+**Arity note for `prim_io_read_line`**: nullary means it takes no value argument —
+only the `IO_token` port. The `PrimIO(ReadLine)` agent is 2-port: principal +
+`IO_token`.
+
+**`prim_io_close` consumes its `File` argument at multiplicity `_1`.** The translator
+verifies the `File` value is not used after `close` is called. This is enforced by the
+borrow checker at Gate 4 before the net is ever constructed.
+
+**Example — how `println "hello"` evaluates end-to-end:**
+
+```
+-- 1. User writes (inside an IO monad context):
+println "hello"
+
+-- 2. Name resolution: `println` resolves to Std.IO.println
+
+-- 3. Std.IO definition:
+val println : &String -> IO Unit =
+  λs:&:String. prim_io_println s
+
+-- 4. IO monad lowers IO Unit to: IO_token ->¹ (IO_token, Unit)
+--    Net translation emits:
+@( λs. PrimIO(Println)[token=IO_token_in, aux=s],  PrimVal(String,"hello") )
+
+-- 5. Evaluator fires β-reduction (@ ⋈ λ):
+PrimIO(Println)[token=IO_token_in, aux=PrimVal(String,"hello")]
+
+-- 6. Evaluator fires IO rule (PrimIO(Println) ⋈ IO_token ⋈ PrimVal(String,...)):
+--    Side effect: writes "hello\n" to stdout
+--    Produces: (IO_token_new, PrimVal(Unit, {}))
+
+-- 7. IO_token_new flows to the next IO action in the bind chain
+--    PrimVal(Unit, {}) flows to the result of this action
+```
+
+The key difference from arithmetic: step 6 executes a real side effect. The token
+`IO_token_new` produced in step 6 is what gates the next IO action — it cannot fire
+until this one completes.
 
 ### 16.4 `Std.String`
 
@@ -1955,6 +2079,11 @@ and is included in scope but not fully specified here.
 | E33 | §13 | Added resolved questions 37–42: IO monad, IO location, Monad hierarchy, IO_token sequencing, do-notation deferral, File linearity |
 | E34 | §13 | Added open questions: do-notation (v1.1), FFI, short-circuit ops (v2.0) |
 | E35 | §14 | Added trade-off entries for monadic IO, Functor/Applicative/Monad in prelude, IO_token internal, do-notation deferral, File concurrency |
+| E36 | §16.3 | Restructured into §16.3.1 (Arithmetic, 30) and §16.3.2 (IO, 9); total updated to 39; added pure/effectful distinction; added subheadings to arithmetic tables |
+| E37 | §16.3.2 | New subsection: complete 9-entry IO intrinsics table (prim_io_print through prim_io_write); arity notes for nullary ReadLine and linear Close; end-to-end `println "hello"` evaluation trace |
+| E38 | §6.4 | Added IO translation rules: current_token_wire threading state; translation of prim_io_println, prim_io_read_line, prim_io_close; bind desugaring to sequential token chain with concrete two-println example |
+| E39 | §13 | Updated question 35 to reflect 39 intrinsics; added question 43 resolving prim_io_* wire-up |
+| E40 | §14 | Updated intrinsics trade-off to reflect arithmetic/IO split and token port distinction |
 
 ### v2.3 Corrections
 

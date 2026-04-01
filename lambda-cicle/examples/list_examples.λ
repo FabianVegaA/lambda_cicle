@@ -1,0 +1,46 @@
+-- List Examples - Demonstrates Std.List operations
+-- Layer 2 (depends on Prelude)
+
+use Std.Prelude
+use Std.List
+
+-- Constructing lists with Nil and Cons
+val numbers : List Int = Cons 1 (Cons 2 (Cons 3 (Cons 4 Nil)))
+
+-- Using map to transform elements
+val doubled : List Int = map (\x : Int. mul x 2) numbers
+
+-- Using filter to select elements
+val evens : List Int = filter (\x : Int. eq (rem x 2) 0) numbers
+
+-- Fold operations
+val sum : Int = fold_left (\acc : Int. \x : Int. add acc x) 0 numbers
+val product : Int = fold_left (\acc : Int. \x : Int. mul acc x) 1 numbers
+
+-- Append two lists
+val more_numbers : List Int = Cons 5 (Cons 6 Nil)
+val all_numbers : List Int = append numbers more_numbers
+
+-- Reverse a list
+val reversed : List Int = reverse numbers
+
+-- Zip two lists
+val names : List String = Cons (prim_int_to_string 1) (Cons (prim_int_to_string 2) Nil)
+val paired : List (Int, String) = zip numbers names
+
+-- Take and drop
+val first_three : List Int = take 3 numbers
+val rest : List Int = drop 2 numbers
+
+-- Nested pattern matching
+val nested : List (List Int) = Cons (Cons 1 (Cons 2 Nil)) (Cons (Cons 3 Nil) Nil)
+
+-- Using uncons to destructure
+val first_and_rest : Option (Int, List Int) = uncons numbers
+
+-- Finding elements
+val has_three : Bool = any (\x : Int. eq x 3) numbers
+val all_positive : Bool = all (\x : Int. gt x 0) numbers
+
+-- Main expression (all examples above are declarations)
+42

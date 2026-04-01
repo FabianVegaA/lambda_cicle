@@ -1,0 +1,94 @@
+-- Recursive Examples - Demonstrates recursion patterns
+-- Layer 1 (Prelude)
+
+use Std.Prelude
+use Std.List
+
+-- Factorial using recursion
+val factorial : Int -> Int = \n : Int.
+    match eq n 0 with { True => 1 | False => mul n (factorial (sub n 1)) }
+
+val fact_5 : Int = factorial 5
+val fact_0 : Int = factorial 0
+
+-- Fibonacci (naive recursive)
+val fib : Int -> Int = \n : Int.
+    match eq n 0 with { True => 0
+        | False =>
+        match eq n 1 with { True => 1
+            | False => add (fib (sub n 1)) (fib (sub n 2)) } }
+
+val fib_10 : Int = fib 10
+
+-- Power function
+val power : Int -> Int -> Int = \base : Int. \exp : Int.
+    match eq exp 0 with { True => 1 | False => mul base (power base (sub exp 1)) }
+
+val two_to_ten : Int = power 2 10
+
+-- Sum of list elements (recursive)
+val sum_list : List Int -> Int = \lst : List Int.
+    match lst with { Nil => 0 | Cons h t => add h (sum_list t) }
+
+val numbers : List Int = Cons 1 (Cons 2 (Cons 3 (Cons 4 (Cons 5 Nil))))
+val total : Int = sum_list numbers
+
+-- Maximum of list (recursive)
+val max_list : List Int -> Option Int = \lst : List Int.
+    match lst with { Nil => None
+        | Cons h t =>
+        match t with { Nil => Some h
+            | Cons _ _ =>
+            match max_list t with { None => Some h
+                | Some m => Some (match gt h m with { True => h | False => m }) } } }
+
+val maximum : Option Int = max_list numbers
+
+-- Count down from n to 0 (returns list)
+val countdown : Int -> List Int = \n : Int.
+    match eq n 0 with { True => Cons 0 Nil | False => Cons n (countdown (sub n 1)) }
+
+val count_from_5 : List Int = countdown 5
+
+-- Is list sorted?
+val is_sorted : List Int -> Bool = \lst : List Int.
+    match lst with { Nil => True
+        | Cons _ Nil => True
+        | Cons h1 (Cons h2 t) =>
+            match gt h1 h2 with { True => False | False => is_sorted (Cons h2 t) } }
+
+val sorted_list : List Int = Cons 1 (Cons 2 (Cons 3 Nil))
+val unsorted_list : List Int = Cons 1 (Cons 3 (Cons 2 Nil))
+val sorted_check : Bool = is_sorted sorted_list
+val unsorted_check : Bool = is_sorted unsorted_list
+
+-- GCD using Euclidean algorithm
+val gcd : Int -> Int -> Int = \a : Int. \b : Int.
+    match eq b 0 with { True => a
+        | False => gcd b (rem a b) }
+
+val gcd_result : Int = gcd 48 18
+
+-- Double recursion (two recursive calls)
+val is_even : Int -> Bool = \n : Int.
+    match eq n 0 with { True => True
+        | False => is_odd (sub n 1) }
+
+val is_odd : Int -> Bool = \n : Int.
+    match eq n 0 with { True => False
+        | False => is_even (sub n 1) }
+
+val even_4 : Bool = is_even 4
+val odd_7 : Bool = is_odd 7
+
+-- Ackermann function (grows very fast)
+val ack : Int -> Int -> Int = \m : Int. \n : Int.
+    match eq m 0 with { True => add n 1
+        | False =>
+        match eq n 0 with { True => ack (sub m 1) 1
+            | False => ack (sub m 1) (ack m (sub n 1)) } }
+
+val ack_3_4 : Int = ack 3 4
+
+-- Main expression
+42

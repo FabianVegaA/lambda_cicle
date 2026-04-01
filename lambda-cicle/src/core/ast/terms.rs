@@ -8,6 +8,7 @@ pub enum Literal {
     Float(f64),
     Bool(bool),
     Char(char),
+    Str(String),
     Unit,
     Prim(PrimOp),
 }
@@ -20,6 +21,7 @@ impl Literal {
             Literal::Float(_) => Type::float(),
             Literal::Bool(_) => Type::bool(),
             Literal::Char(_) => Type::char(),
+            Literal::Str(_) => Type::inductive("String", vec![]),
             Literal::Unit => Type::unit(),
             Literal::Prim(op) => match op {
                 PrimOp::INeg => Type::arrow(Type::int(), Multiplicity::One, Type::int()),
@@ -60,6 +62,7 @@ impl fmt::Display for Literal {
             Literal::Float(n) => write!(f, "{}", n),
             Literal::Bool(b) => write!(f, "{}", b),
             Literal::Char(c) => write!(f, "'{}'", c),
+            Literal::Str(s) => write!(f, "\"{}\"", s),
             Literal::Unit => write!(f, "()"),
             Literal::Prim(op) => write!(f, "prim({:?})", op),
         }
@@ -146,6 +149,18 @@ impl<'de> serde::Deserialize<'de> for UseMode {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct Constraint {
+    pub trait_name: TraitName,
+    pub ty: Type,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Constructor {
+    pub name: String,
+    pub args: Vec<Type>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum Decl {
     TypeDecl {
         visibility: Visibility,
@@ -153,6 +168,7 @@ pub enum Decl {
         params: Vec<String>,
         ty: Type,
         transparent: bool,
+        constructors: Vec<Constructor>,
     },
     ValDecl {
         visibility: Visibility,
@@ -170,7 +186,7 @@ pub enum Decl {
     ImplDecl {
         ty: Type,
         trait_name: TraitName,
-        constraints: Vec<super::Constraint>,
+        constraints: Vec<Constraint>,
         methods: Vec<MethodDef>,
     },
     UseDecl {
@@ -191,12 +207,6 @@ pub struct MethodDef {
     pub name: MethodName,
     pub ty: Type,
     pub term: Box<Term>,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct Constraint {
-    pub trait_name: TraitName,
-    pub ty: Type,
 }
 
 #[derive(Debug, Clone, PartialEq)]

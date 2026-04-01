@@ -26,17 +26,27 @@ impl NativeKind {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum IOOp {
     Print,
+    Println,
+    EPrint,
+    EPrintln,
     ReadLine,
-    OpenFile,
-    CloseFile,
-    FileWrite,
+    Open,
+    Close,
+    Read,
+    Write,
 }
 
 impl IOOp {
     pub fn arity(&self) -> usize {
         match self {
-            IOOp::Print | IOOp::ReadLine => 1,
-            IOOp::OpenFile | IOOp::CloseFile | IOOp::FileWrite => 2,
+            IOOp::Print
+            | IOOp::Println
+            | IOOp::EPrint
+            | IOOp::EPrintln
+            | IOOp::Close
+            | IOOp::Read => 1,
+            IOOp::Open | IOOp::Write => 2,
+            IOOp::ReadLine => 0, // nullary - no value argument, only IO_token
         }
     }
 }
@@ -64,6 +74,7 @@ impl PrimVal {
     }
 }
 
+pub use operations::prim_name_to_io_op;
 pub use operations::prim_name_to_op;
 
 pub static INTRINSICS_TABLE: &[&str] = &[
@@ -105,14 +116,16 @@ pub static INTRINSICS_TABLE: &[&str] = &[
     "prim_int_to_string",
     "prim_float_to_string",
     "prim_char_to_string",
-    // IO operations
-    "prim_print",
-    "prim_read_line",
-    "prim_open_file",
-    "prim_close_file",
-    "prim_file_write",
-    "prim_io_pure",
-    "prim_io_bind",
+    // IO operations (from §16.3.2)
+    "prim_io_print",
+    "prim_io_println",
+    "prim_io_eprint",
+    "prim_io_eprintln",
+    "prim_io_read_line",
+    "prim_io_open",
+    "prim_io_close",
+    "prim_io_read",
+    "prim_io_write",
 ];
 
 pub fn is_valid_primitive(name: &str) -> bool {

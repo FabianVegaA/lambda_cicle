@@ -11,77 +11,71 @@ pub val cons : a -> List a -> List a = \x : a. \xs : List a. Cons x xs
 
 -- Deconstruction
 pub val head : List a -> Option a = \xs : List a.
-    match xs with { Nil -> None | Cons h _ -> Some h }
+    match xs with { Nil => None | Cons h _ => Some h }
 
 pub val tail : List a -> Option (List a) = \xs : List a.
-    match xs with { Nil -> None | Cons _ t -> Some t }
+    match xs with { Nil => None | Cons _ t => Some t }
 
 pub val uncons : List a -> Option (a, List a) = \xs : List a.
-    match xs with { Nil -> None | Cons h t -> Some (pair h t) }
+    match xs with { Nil => None | Cons h t => Some (pair h t) }
 
 -- Observation
 pub val is_empty : &List a -> Bool = \xs : &(List a).
-    match xs with { Nil -> true | Cons _ _ -> false }
+    match xs with { Nil => True | Cons _ _ => False }
 
 pub val length : &List a -> Int = \xs : &(List a).
-    match xs with { Nil -> 0 | Cons _ t -> prim_iadd 1 (length t) }
+    match xs with { Nil => 0 | Cons _ t => add 1 (length t) }
 
 -- Transformation
 pub val map : (a -> b) -> List a -> List b = \f : a -> b. \xs : List a.
-    match xs with { Nil -> Nil | Cons h t -> Cons (f h) (map f t) }
+    match xs with { Nil => Nil | Cons h t => Cons (f h) (map f t) }
 
 pub val filter : (&a -> Bool) -> List a -> List a = \p : &a -> Bool. \xs : List a.
-    match xs with { Nil -> Nil | Cons h t ->
-        match p h with { true -> Cons h (filter p t) | false -> filter p t } }
+    match xs with { Nil => Nil | Cons h t =>
+        match p h with { True => Cons h (filter p t) | False => filter p t } }
 
 pub val fold_left : (b -> a -> b) -> b -> &List a -> b = \f : b -> a -> b. \acc : b. \xs : &(List a).
-    match xs with { Nil -> acc | Cons h t -> fold_left f (f acc h) t }
+    match xs with { Nil => acc | Cons h t => fold_left f (f acc h) t }
 
 pub val fold_right : (a -> b -> b) -> &List a -> b -> b = \f : a -> b -> b. \xs : &(List a). \acc : b.
-    match xs with { Nil -> acc | Cons h t -> f h (fold_right f t acc) }
+    match xs with { Nil => acc | Cons h t => f h (fold_right f t acc) }
 
 pub val append : List a -> List a -> List a = \xs : List a. \ys : List a.
-    match xs with { Nil -> ys | Cons h t -> Cons h (append t ys) }
+    match xs with { Nil => ys | Cons h t => Cons h (append t ys) }
 
 pub val reverse : List a -> List a = \xs : List a.
     fold_left (\acc : List a. \x : a. Cons x acc) Nil xs
 
 pub val zip : List a -> List b -> List (a, b) = \xs : List a. \ys : List b.
-    match xs with { Nil -> Nil | Cons hx tx ->
-        match ys with { Nil -> Nil | Cons hy ty -> Cons (pair hx hy) (zip tx ty) } }
+    match xs with { Nil => Nil | Cons hx tx =>
+        match ys with { Nil => Nil | Cons hy ty => Cons (pair hx hy) (zip tx ty) } }
 
 pub val take : Int -> List a -> List a = \n : Int. \xs : List a.
-    match prim_ifeq n 0 with { true -> Nil | false ->
-        match xs with { Nil -> Nil | Cons h t -> Cons h (take (prim_isub n 1) t) } }
+    match eq n 0 with { True => Nil | False =>
+        match xs with { Nil => Nil | Cons h t => Cons h (take (sub n 1) t) } }
 
 pub val drop : Int -> List a -> List a = \n : Int. \xs : List a.
-    match prim_ifeq n 0 with { true -> xs | false ->
-        match xs with { Nil -> Nil | Cons _ t -> drop (prim_isub n 1) t } }
+    match eq n 0 with { True => xs | False =>
+        match xs with { Nil => Nil | Cons _ t => drop (sub n 1) t } }
 
 -- Search
 pub val find : (&a -> Bool) -> &List a -> Option a = \p : &a -> Bool. \xs : &(List a).
-    match xs with { Nil -> None | Cons h t ->
-        match p h with { true -> Some h | false -> find p t } }
+    match xs with { Nil => None | Cons h t =>
+        match p h with { True => Some h | False => find p t } }
 
 pub val any : (&a -> Bool) -> &List a -> Bool = \p : &a -> Bool. \xs : &(List a).
-    match xs with { Nil -> false | Cons h t ->
-        match p h with { true -> true | false -> any p t } }
+    match xs with { Nil => False | Cons h t =>
+        match p h with { True => True | False => any p t } }
 
 pub val all : (&a -> Bool) -> &List a -> Bool = \p : &a -> Bool. \xs : &(List a).
-    match xs with { Nil -> true | Cons h t ->
-        match p h with { true -> all p t | false -> false } }
+    match xs with { Nil => True | Cons h t =>
+        match p h with { True => all p t | False => False } }
 
 -- List impls
 impl Eq for (List a) where Eq a with eq = \xs : &(List a). \ys : &(List a).
-    match xs with { Nil ->
-        match ys with { Nil -> true | Cons _ _ -> false } | Cons hx tx ->
-        match ys with { Nil -> false | Cons hy ty ->
-            prim_and (eq hx hy) (eq tx ty) } }
-
-impl Ord for (List a) where Ord a with compare = \xs : &(List a). \ys : &(List a).
-    match xs with { Nil ->
-        match ys with { Nil -> prim_ifeq 0 0 | Cons _ _ -> prim_ifeq 0 1 } | Cons hx tx ->
-        match ys with { Nil -> prim_ifeq 1 0 | Cons hy ty ->
-            match compare hx hy with { EQ -> compare tx ty | other -> other } } }
+    match xs with { Nil =>
+        match ys with { Nil => True | Cons _ _ => False } | Cons hx tx =>
+        match ys with { Nil => False | Cons hy ty =>
+            and (eq hx hy) (eq tx ty) } }
 
 impl Clone for (List a) where Clone a with clone = map clone

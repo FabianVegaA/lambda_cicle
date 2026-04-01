@@ -1,0 +1,74 @@
+-- Constructor Patterns - Demonstrates pattern matching with constructors
+-- Layer 1 (Prelude types)
+
+use Std.Prelude
+
+-- Basic Option pattern matching
+val maybe_double : Option Int -> Int = \opt : Option Int.
+    match opt with { None => 0 | Some x => mul x 2 }
+
+val result1 : Int = maybe_double (Some 5)
+val result2 : Int = maybe_double None
+
+-- Result pattern matching
+val safe_div : Int -> Int -> Option Int = \a : Int. \b : Int.
+    match div a b with { Err _ => None | Ok v => Some v }
+
+-- Nested list patterns
+val sum_nested : List (List Int) -> Int = \matrix : List (List Int).
+    match matrix with { Nil => 0 
+        | Cons row rest =>
+        match row with { Nil => sum_nested rest
+            | Cons x xs => add x (sum_nested (Cons xs rest)) } }
+
+val nested_list : List (List Int) = 
+    Cons (Cons 1 (Cons 2 Nil)) (Cons (Cons 3 Nil) Nil)
+
+val nested_sum : Int = sum_nested nested_list
+
+-- Deeply nested patterns with Cons
+val flatten : List (List Int) -> List Int = \lists : List (List Int).
+    match lists with { Nil => Nil
+        | Cons head tail =>
+        match head with { Nil => flatten tail
+            | Cons x xs => Cons x (flatten (Cons xs tail)) } }
+
+val flattened : List Int = flatten nested_list
+
+-- Pattern matching on Ordering
+val describe_ordering : Ordering -> String = \ord : Ordering.
+    match ord with { EQ => "equal" | LT => "less" | GT => "greater" }
+
+-- Guard-style patterns with nested matches
+val classify : Int -> String = \n : Int.
+    match eq n 0 with { True => "zero"
+        | False =>
+        match gt n 0 with { True => "positive"
+            | False => "negative" } }
+
+-- Multiple constructor arguments
+type Point = Point Int Int
+type Shape = Circle Int | Rectangle Int Int
+
+val area : Shape -> Int = \s : Shape.
+    match s with { Circle r => mul r r
+        | Rectangle w h => mul w h }
+
+val circle_area : Int = area (Circle 5)
+val rect_area : Int = area (Rectangle 3 4)
+
+-- Wildcard in constructor pattern
+val ignore_tail : List Int -> Int = \lst : List Int.
+    match lst with { Nil => 0 | Cons h _ => h }
+
+val first_elem : Int = ignore_tail (Cons 10 (Cons 20 Nil))
+
+-- Nested wildcards
+val count_elements : List (List Int) -> Int = \lists : List (List Int).
+    match lists with { Nil => 0
+        | Cons head tail =>
+        match head with { Nil => count_elements tail
+            | Cons _ _ => add 1 (count_elements tail) } }
+
+-- Main expression
+42

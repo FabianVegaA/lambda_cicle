@@ -21,7 +21,6 @@ pub enum Token {
     KwAs,
     TyInt,
     TyFloat,
-    TyBool,
     TyChar,
     MultiplicityZero,
     MultiplicityOne,
@@ -44,6 +43,7 @@ pub enum Token {
     FloatLit(f64),
     BoolLit(bool),
     CharLit(char),
+    StringLit(String),
     UnitLit,
     Ident(String),
     EOF,
@@ -173,6 +173,10 @@ impl Lexer {
                     self.advance();
                     tokens.push(Token::KwLambda);
                 }
+                Some('"') => {
+                    let s = self.read_string()?;
+                    tokens.push(Token::StringLit(s));
+                }
                 Some(c) => {
                     return Err(LexError::UnexpectedChar(c, self.line, self.col));
                 }
@@ -264,6 +268,54 @@ impl Lexer {
         }
     }
 
+    fn read_string(&mut self) -> Result<String, LexError> {
+        self.advance(); // consume opening "
+        let mut result = String::new();
+        loop {
+            match self.peek() {
+                None => return Err(LexError::UnexpectedChar('"', self.line, self.col)),
+                Some('"') => {
+                    self.advance(); // consume closing "
+                    break;
+                }
+                Some('\\') => {
+                    self.advance();
+                    match self.peek() {
+                        Some('n') => {
+                            self.advance();
+                            result.push('\n');
+                        }
+                        Some('t') => {
+                            self.advance();
+                            result.push('\t');
+                        }
+                        Some('\\') => {
+                            self.advance();
+                            result.push('\\');
+                        }
+                        Some('"') => {
+                            self.advance();
+                            result.push('"');
+                        }
+                        Some(c) => {
+                            let c = c;
+                            self.advance();
+                            result.push('\\');
+                            result.push(c);
+                        }
+                        None => return Err(LexError::UnexpectedChar('\\', self.line, self.col)),
+                    }
+                }
+                Some(c) => {
+                    let c = c;
+                    self.advance();
+                    result.push(c);
+                }
+            }
+        }
+        Ok(result)
+    }
+
     fn read_identifier(&mut self) -> Result<String, LexError> {
         let mut result = String::new();
         while let Some(c) = self.peek() {
@@ -301,7 +353,6 @@ impl Lexer {
             "as" => Token::KwAs,
             "Int" => Token::TyInt,
             "Float" => Token::TyFloat,
-            "Bool" => Token::TyBool,
             "Char" => Token::TyChar,
             "omega" => Token::MultiplicityOmega,
             "()" => Token::UnitLit,

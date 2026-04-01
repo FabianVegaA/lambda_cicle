@@ -9,6 +9,7 @@ pub use port::PortIndex;
 pub use wire::Wire;
 pub use wire::WireId;
 
+use crate::runtime::primitives::{IOOp, PrimVal};
 use hashbrown::HashMap;
 
 #[derive(Debug, Clone)]
@@ -178,6 +179,9 @@ impl Net {
             return result;
         }
         if let Some(result) = self.try_prim_val_dup() {
+            return result;
+        }
+        if let Some(result) = self.try_io_eval() {
             return result;
         }
         InteractionResult::None
@@ -476,6 +480,177 @@ impl Net {
             }
         }
         true
+    }
+
+    fn try_io_eval(&mut self) -> Option<InteractionResult> {
+        let mut io_op_to_execute: Option<(
+            NodeId,
+            IOOp,
+            Vec<PrimVal>,
+            Vec<(NodeId, PortIndex)>,
+            NodeId,
+            PortIndex,
+        )> = None;
+
+        for (io_id, node) in self.nodes.iter().enumerate() {
+            let Agent::PrimIO(op) = &node.agent else {
+                continue;
+            };
+
+            let io_id = NodeId(io_id);
+            let arity = op.arity();
+
+            // Check for IOToken on port 1
+            let io_token_port = self.get_connected_port(io_id, PortIndex(1))?;
+            let (token_node, token_port) = io_token_port;
+
+            if token_port != PortIndex(0) {
+                continue;
+            }
+
+            if !matches!(self.get_node(token_node)?.agent, Agent::IOToken) {
+                continue;
+            }
+
+            // Collect all argument values from ports 2+
+            let mut values: Vec<PrimVal> = Vec::with_capacity(arity);
+            let mut value_nodes: Vec<(NodeId, PortIndex)> = Vec::with_capacity(arity);
+
+            let mut all_values = true;
+            for port_idx in 0..arity {
+                let port = PortIndex(port_idx + 2);
+                if let Some((node_id, node_port)) = self.get_connected_port(io_id, port) {
+                    if let Agent::PrimVal(val) = &self.get_node(node_id)?.agent {
+                        values.push(val.clone());
+                        value_nodes.push((node_id, node_port));
+                    } else {
+                        all_values = false;
+                        break;
+                    }
+                } else {
+                    all_values = false;
+                    break;
+                }
+            }
+
+            if !all_values || values.len() != arity {
+                continue;
+            }
+
+            // Store the operation to execute outside the borrow scope
+            io_op_to_execute = Some((io_id, *op, values, value_nodes, token_node, token_port));
+            break;
+        }
+
+        let (io_id, op, values, value_nodes, token_node, token_port) = io_op_to_execute?;
+
+        // Execute the IO operation (outside the borrow scope)
+        let result = self.execute_io_op(&op, &values)?;
+
+        // Disconnect argument nodes
+        for (vn_id, vn_port) in &value_nodes {
+            self.disconnect_port(*vn_id, *vn_port)?;
+        }
+
+        // Disconnect old IOToken (disconnect_port removes both endpoints of the wire)
+        self.disconnect_port(io_id, PortIndex(1))?;
+
+        // Create fresh IOToken
+        let new_token = Node::io_token();
+        let new_token_id = self.add_node(new_token);
+
+        // Connect new IOToken to port 1
+        self.connect(new_token_id, PortIndex(0), io_id, PortIndex(1));
+
+        // Create result value on port 0
+        let result_node = Node::prim_val(result);
+        let result_id = self.add_node(result_node);
+        self.connect(result_id, PortIndex(0), io_id, PortIndex(0));
+
+        Some(InteractionResult::PrimEval)
+    }
+
+    fn execute_io_op(&mut self, op: &IOOp, args: &[PrimVal]) -> Option<PrimVal> {
+        use std::io::{self, Write};
+        match op {
+            IOOp::Print => {
+                let s = args.first()?;
+                if let PrimVal::String(s) = s {
+                    print!("{}", s);
+                    Some(PrimVal::Unit)
+                } else {
+                    None
+                }
+            }
+            IOOp::Println => {
+                let s = args.first()?;
+                if let PrimVal::String(s) = s {
+                    println!("{}", s);
+                    Some(PrimVal::Unit)
+                } else {
+                    None
+                }
+            }
+            IOOp::EPrint => {
+                let s = args.first()?;
+                if let PrimVal::String(s) = s {
+                    eprint!("{}", s);
+                    Some(PrimVal::Unit)
+                } else {
+                    None
+                }
+            }
+            IOOp::EPrintln => {
+                let s = args.first()?;
+                if let PrimVal::String(s) = s {
+                    eprintln!("{}", s);
+                    Some(PrimVal::Unit)
+                } else {
+                    None
+                }
+            }
+            IOOp::ReadLine => {
+                // nullary - no arguments
+                let mut input = String::new();
+                match io::stdin().read_line(&mut input) {
+                    Ok(_) => {
+                        input.pop(); // Remove trailing newline
+                        Some(PrimVal::String(input))
+                    }
+                    Err(_) => Some(PrimVal::String(String::new())),
+                }
+            }
+            IOOp::Open => {
+                let s = args.first()?;
+                if let PrimVal::String(path) = s {
+                    use std::fs::File;
+                    match File::open(path) {
+                        Ok(_) => Some(PrimVal::String(format!("opened:{}", path))),
+                        Err(e) => Some(PrimVal::String(format!("error:{}", e))),
+                    }
+                } else {
+                    None
+                }
+            }
+            IOOp::Close => {
+                // File handles are managed by Rust, no-op here
+                Some(PrimVal::Unit)
+            }
+            IOOp::Read => {
+                // For now, return empty string - full file read deferred
+                Some(PrimVal::String(String::new()))
+            }
+            IOOp::Write => {
+                let content = args.get(1)?;
+                if let PrimVal::String(content) = content {
+                    print!("{}", content);
+                    io::stdout().flush().ok();
+                    Some(PrimVal::Unit)
+                } else {
+                    None
+                }
+            }
+        }
     }
 }
 

@@ -4,7 +4,10 @@ use lambda_cicle::runtime::primitives::{
 
 #[test]
 fn test_intrinsics_table_count() {
-    assert_eq!(INTRINSICS_TABLE.len(), 38, "Expected exactly 38 intrinsics");
+    // 31 arithmetic (Int 6 + Float 5 + IntCmp 6 + FloatCmp 6 + Bool 3 + Char 2 + Conv 3)
+    // + 9 IO (from §16.3.2)
+    // = 40 total
+    assert_eq!(INTRINSICS_TABLE.len(), 40, "Expected exactly 40 intrinsics");
 }
 
 #[test]
@@ -330,10 +333,14 @@ fn test_type_mismatch_int_bool() {
 #[test]
 fn test_io_op_arity() {
     assert_eq!(IOOp::Print.arity(), 1);
-    assert_eq!(IOOp::ReadLine.arity(), 1);
-    assert_eq!(IOOp::OpenFile.arity(), 2);
-    assert_eq!(IOOp::CloseFile.arity(), 2);
-    assert_eq!(IOOp::FileWrite.arity(), 2);
+    assert_eq!(IOOp::Println.arity(), 1);
+    assert_eq!(IOOp::EPrint.arity(), 1);
+    assert_eq!(IOOp::EPrintln.arity(), 1);
+    assert_eq!(IOOp::ReadLine.arity(), 0); // nullary
+    assert_eq!(IOOp::Open.arity(), 2);
+    assert_eq!(IOOp::Close.arity(), 1);
+    assert_eq!(IOOp::Read.arity(), 1);
+    assert_eq!(IOOp::Write.arity(), 2);
 }
 
 #[test]

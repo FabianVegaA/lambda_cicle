@@ -1,7 +1,7 @@
 use crate::core::ast::types::Multiplicity;
 use crate::core::ast::{Arm, Literal, Pattern, Term};
 use crate::runtime::net::{Agent, Net, Node, NodeId, Port, PortIndex, Wire};
-use crate::runtime::primitives::{PrimOp, PrimVal};
+use crate::runtime::primitives::{prim_name_to_io_op, PrimOp, PrimVal};
 
 pub struct NetBuilder {
     net: Net,
@@ -52,6 +52,22 @@ impl NetBuilder {
     }
 
     fn translate_var(&mut self, name: &str) -> NodeId {
+        // Check if this is a prim_io_* intrinsic
+        if let Some(io_op) = prim_name_to_io_op(name) {
+            let node = Node::prim_io(io_op);
+            let id = self.net.add_node(node);
+            // Port 0: principal
+            self.net.add_free_port(id, PortIndex(0));
+            // Port 1: IO_token (will be connected at runtime)
+            self.net.add_free_port(id, PortIndex(1));
+            // Ports 2+: arguments (based on arity)
+            let arity = io_op.arity();
+            for i in 0..arity {
+                self.net.add_free_port(id, PortIndex(i + 2));
+            }
+            return id;
+        }
+
         let node = Node::constructor(name.to_string(), 2);
         let id = self.net.add_node(node);
         self.net.add_free_port(id, PortIndex(0));
@@ -204,6 +220,12 @@ impl NetBuilder {
             }
             Literal::Char(c) => {
                 let node = Node::prim_val(PrimVal::Char(*c));
+                let id = self.net.add_node(node);
+                self.net.add_free_port(id, PortIndex(0));
+                id
+            }
+            Literal::Str(s) => {
+                let node = Node::prim_val(PrimVal::String(s.clone()));
                 let id = self.net.add_node(node);
                 self.net.add_free_port(id, PortIndex(0));
                 id

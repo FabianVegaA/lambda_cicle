@@ -1,0 +1,54 @@
+-- Map Examples - Demonstrates Std.Map AVL tree operations
+-- Layer 2 (depends on Prelude and List)
+
+use Std.Prelude
+use Std.List
+
+-- Create an empty map (keys are Int, values are String)
+val empty_map : Map Int String = empty
+
+-- Build a map with singleton and insert
+val scores : Map Int String = 
+    let m1 = insert 1 "Alice" empty in
+    let m2 = insert 2 "Bob" m1 in
+    let m3 = insert 3 "Charlie" m2 in
+    insert 4 "Diana" m3
+
+-- Lookup operations
+val alice_score : Option String = lookup 1 scores
+val not_found : Option String = lookup 99 scores
+
+-- Check if key exists
+val has_charlie : Bool = contains 3 scores
+val no_one : Bool = contains 99 scores
+
+-- Get map size
+val num_entries : Int = size scores
+
+-- Delete from map
+val scores_without_bob : Map Int String = delete 2 scores
+val still_has_bob : Bool = contains 2 scores
+
+-- Convert map to lists
+val all_keys : List Int = keys scores
+val all_values : List String = values scores
+val key_values : List (Int, String) = to_list scores
+
+-- Convert list to map
+val entries : List (Int, String) = 
+    Cons (pair 10 "X") (Cons (pair 20 "Y") (Cons (pair 30 "Z") Nil))
+val list_to_map : Map Int String = from_list entries
+
+-- Nested map operations
+val nested_insert : Map Int String = 
+    insert 5 "Eve" (insert 6 "Frank" scores)
+
+-- Map size after deletions
+val smaller_size : Int = size (delete 1 (delete 2 scores))
+
+-- Pattern matching on map structure
+val is_empty_map : Bool = 
+    match scores with { Empty => True | Node _ _ _ _ _ => False }
+
+-- Main expression
+42

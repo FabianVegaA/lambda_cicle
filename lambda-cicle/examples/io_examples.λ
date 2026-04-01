@@ -1,0 +1,79 @@
+-- IO Examples - Demonstrates Std.IO operations
+-- Layer 3 (depends on Prelude, String, Show)
+-- Note: IO operations require the runtime to wire up IO_token
+
+use Std.Prelude
+
+-- IO type and operations are declared in Std.IO
+-- These examples show the IO monad structure
+
+-- Sequential IO operations using bind
+-- bind : IO a -> (a -> IO b) -> IO b
+--
+-- Example: Read a line and print it back
+-- val echo : IO Unit =
+--     bind read_line (\result : Result String IOError.
+--         match result with { Ok s => println s | Err e => println "error" })
+
+-- File handling pattern
+-- val read_file : String -> IO Unit = \path : String.
+--     bind (open path) (\result : Result File IOError.
+--         match result with {
+--             Err e => println "Failed to open"
+--             | Ok f =>
+--                 bind (read f) (\content : Result String IOError.
+--                     match content with {
+--                         Err _ => println "Read error"
+--                         | Ok data => println data
+--                     }) })
+
+-- Multiple sequential prints
+-- val greet : IO Unit =
+--     then (println "Hello")
+--          (println "World")
+
+-- IO monad laws demonstration
+-- bind (pure x) f = f x
+-- bind m pure = m
+-- bind (bind m f) g = bind m (\x. bind (f x) g)
+
+-- Pure values in IO context
+-- val pure_example : IO Int = pure 42
+
+-- Using Applicative style
+-- val combined : IO Int = apply (pure prim_iadd) (pure 5)
+
+-- Error handling with Result
+-- val safe_io : IO (Result Int IOError) =
+--     bind (open "data.txt") (\result.
+--         match result with {
+--             Err e => pure (Err e)
+--             | Ok f => pure (Ok 42)
+--         })
+
+-- IO_token threading (internal representation)
+-- IO a internally is: IO_token -> (IO_token, a)
+-- The runtime creates IO_token at program start
+
+-- Working with IOError
+-- val classify_error : IOError -> String = \e : IOError.
+--     match e with {
+--         NotFound => "File not found"
+--         | PermissionDenied => "Access denied"
+--         | UnexpectedEOF => "Premature end"
+--         | Other msg => msg }
+
+-- Sequential operations on files
+-- val write_then_close : String -> String -> IO Unit = \path : String. \content : String.
+--     bind (open path) (\result.
+--         match result with {
+--             Err e => println "Cannot open"
+--             | Ok f =>
+--                 bind (write f content) (\write_result.
+--                     match write_result with {
+--                         Err e => println "Write failed"
+--                         | Ok _ => close f
+--                     }) })
+
+-- Main expression (placeholder - actual IO requires runtime entry point)
+42
