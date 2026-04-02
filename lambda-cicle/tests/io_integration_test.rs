@@ -1,3 +1,4 @@
+use lambda_cicle::runtime::evaluator::Evaluator;
 use lambda_cicle::runtime::net::{Agent, InteractionResult, Net, Node, NodeId, PortIndex};
 use lambda_cicle::runtime::primitives::{prim_name_to_io_op, IOOp, PrimVal, INTRINSICS_TABLE};
 
@@ -172,4 +173,41 @@ fn test_prim_io_write_arity() {
 
 mod net {
     pub use lambda_cicle::runtime::net::Net;
+}
+
+#[test]
+fn test_wire_io_entry_point_creates_token() {
+    use lambda_cicle::runtime::net::{Agent, Node, PortIndex};
+
+    let mut net = Net::new();
+
+    let io_node = Node::prim_io(lambda_cicle::runtime::primitives::IOOp::Println);
+    let io_id = net.add_node(io_node);
+
+    net.add_free_port(io_id, PortIndex(0));
+    net.add_free_port(io_id, PortIndex(1));
+    net.add_free_port(io_id, PortIndex(2));
+
+    assert!(
+        net.get_wire_at_port(io_id, PortIndex(1)).is_none(),
+        "Port 1 should be free before wiring"
+    );
+
+    use lambda_cicle::runtime::evaluator::SequentialEvaluator;
+    let evaluator = SequentialEvaluator::new();
+    let result = evaluator.evaluate(&mut net);
+
+    assert!(result.is_ok(), "Evaluation should succeed");
+
+    let token_nodes: Vec<_> = net
+        .nodes()
+        .iter()
+        .filter(|n| matches!(n.agent, Agent::IOToken))
+        .collect();
+
+    assert_eq!(
+        token_nodes.len(),
+        1,
+        "Should have exactly one IO token after wiring"
+    );
 }

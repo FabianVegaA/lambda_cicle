@@ -78,45 +78,46 @@ pub use operations::prim_name_to_io_op;
 pub use operations::prim_name_to_op;
 
 pub static INTRINSICS_TABLE: &[&str] = &[
-    // Integer arithmetic
+    // Integer arithmetic (§16.3.1)
     "prim_iadd",
     "prim_isub",
     "prim_imul",
     "prim_idiv",
     "prim_irem",
     "prim_ineg",
-    // Float arithmetic
+    "prim_ihash",
+    // Float arithmetic (§16.3.1)
     "prim_fadd",
     "prim_fsub",
     "prim_fmul",
     "prim_fdiv",
+    "prim_frem",
     "prim_fneg",
-    // Integer comparison
+    // Integer comparison (§16.3.1)
     "prim_ieq",
     "prim_ifeq",
     "prim_igt",
     "prim_ige",
     "prim_ilt",
     "prim_ile",
-    // Float comparison
+    // Float comparison (§16.3.1)
     "prim_feq",
     "prim_fne",
     "prim_fgt",
     "prim_fge",
     "prim_flt",
     "prim_fle",
-    // Boolean
-    "prim_not",
-    "prim_and",
-    "prim_or",
-    // Char
-    "prim_chr",
-    "prim_ord",
-    // Conversion to string
-    "prim_int_to_string",
-    "prim_float_to_string",
-    "prim_char_to_string",
-    // IO operations (from §16.3.2)
+    // Boolean operations (§16.3.1)
+    "prim_bnot",
+    "prim_band",
+    "prim_bor",
+    "prim_beq",
+    "prim_bhash",
+    // Char operations (§16.3.1)
+    "prim_ceq",
+    "prim_cord",
+    "prim_chash",
+    // IO operations (§16.3.2)
     "prim_io_print",
     "prim_io_println",
     "prim_io_eprint",

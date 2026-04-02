@@ -441,3 +441,145 @@ fn test_parse_pattern_with_parens_grouping() {
         result
     );
 }
+#[test]
+fn test_simple_prelude_types() {
+    use lambda_cicle::core::parser::parse_program;
+    let source = std::fs::read_to_string("/tmp/simple_test.λ").unwrap();
+    let result = parse_program(&source);
+    println!("Result: {:?}", result);
+    assert!(result.is_ok(), "Should parse: {:?}", result);
+}
+#[test]
+fn test_minimal() {
+    use lambda_cicle::core::parser::parse_program;
+    let source = std::fs::read_to_string("/tmp/minimal_test.λ").unwrap();
+    println!("Source:
+{}", source);
+    let result = parse_program(&source);
+    println!("Result: {:?}", result);
+    assert!(result.is_ok(), "Should parse");
+}
+#[test]
+fn test_two() {
+    use lambda_cicle::core::parser::parse_program;
+    let source = std::fs::read_to_string("/tmp/test2.λ").unwrap();
+    println!("Source:
+{}", source);
+    let result = parse_program(&source);
+    println!("Result: {:?}", result);
+    assert!(result.is_ok(), "Should parse");
+}
+#[test]
+fn test_full_prelude() {
+    use lambda_cicle::core::parser::parse_program;
+    let source = std::fs::read_to_string("stdlib/Prelude.λ").unwrap();
+    println!("Source length: {}", source.len());
+    let result = parse_program(&source);
+    println!("Result: {:?}", result);
+    assert!(result.is_ok(), "Should parse: {:?}", result);
+}
+#[test]
+fn test_option() {
+    use lambda_cicle::core::parser::parse_program;
+    let source = std::fs::read_to_string("/tmp/test_option.λ").unwrap();
+    println!("Source: {}", source);
+    let result = parse_program(&source);
+    println!("Result: {:?}", result);
+    assert!(result.is_ok(), "Should parse");
+}
+#[test]
+fn test_types() {
+    use lambda_cicle::core::parser::parse_program;
+    let source = std::fs::read_to_string("/tmp/test_types.λ").unwrap();
+    println!("Source length: {}", source.len());
+    let result = parse_program(&source);
+    println!("Result: {:?}", result);
+    assert!(result.is_ok(), "Should parse");
+}
+#[test]
+fn test_val() {
+    use lambda_cicle::core::parser::parse_program;
+    let source = std::fs::read_to_string("/tmp/test_val.λ").unwrap();
+    println!("Source:
+{}", source);
+    let result = parse_program(&source);
+    println!("Result: {:?}", result);
+    assert!(result.is_ok(), "Should parse");
+}
+#[test]
+fn test_20() {
+    use lambda_cicle::core::parser::parse_program;
+    let source = std::fs::read_to_string("/tmp/test_20.λ").unwrap();
+    println!("Source lines: {}", source.lines().count());
+    let result = parse_program(&source);
+    println!("Result: {:?}", result);
+    assert!(result.is_ok(), "Should parse");
+}
+#[test]
+fn test_12() {
+    use lambda_cicle::core::parser::parse_program;
+    let source = std::fs::read_to_string("/tmp/test_12.λ").unwrap();
+    println!("Source lines: {}", source.lines().count());
+    let result = parse_program(&source);
+    println!("Result: {:?}", result);
+    assert!(result.is_ok(), "Should parse");
+}
+#[test]
+fn test_10() {
+    use lambda_cicle::core::parser::parse_program;
+    let source = std::fs::read_to_string("/tmp/test_10.λ").unwrap();
+    println!("Source lines: {}", source.lines().count());
+    let result = parse_program(&source);
+    println!("Result: {:?}", result);
+    assert!(result.is_ok(), "Should parse");
+}
+#[test]
+fn test_types_5() {
+    use lambda_cicle::core::parser::parse_program;
+    let source = std::fs::read_to_string("/tmp/test_types_5.λ").unwrap();
+    println!("Lines: {}", source.lines().count());
+    let result = parse_program(&source);
+    println!("Result: {:?}", result);
+    assert!(result.is_ok());
+}
+#[test]
+fn test_types_6() {
+    use lambda_cicle::core::parser::parse_program;
+    let source = std::fs::read_to_string("/tmp/test_types_6.λ").unwrap();
+    println!("Lines: {}", source.lines().count());
+    let result = parse_program(&source);
+    println!("Result: {:?}", result);
+    assert!(result.is_ok());
+}
+#[test]
+fn test_types_7() {
+    use lambda_cicle::core::parser::parse_program;
+    let source = std::fs::read_to_string("/tmp/test_types_7.λ").unwrap();
+    let result = parse_program(&source);
+    println!("Result: {:?}", result);
+    assert!(result.is_ok());
+}
+#[test]
+fn test_result_only() {
+    use lambda_cicle::core::parser::parse_program;
+    let source = std::fs::read_to_string("/tmp/test_result_only.λ").unwrap();
+    let result = parse_program(&source);
+    println!("Result: {:?}", result);
+    assert!(result.is_ok());
+}
+#[test]
+fn test_ok() {
+    use lambda_cicle::core::parser::parse_program;
+    let source = std::fs::read_to_string("/tmp/test_ok.λ").unwrap();
+    let result = parse_program(&source);
+    println!("Result: {:?}", result);
+    assert!(result.is_ok());
+}
+#[test]
+fn test_two_ctors() {
+    use lambda_cicle::core::parser::parse_program;
+    let source = std::fs::read_to_string("/tmp/test_two_ctors.λ").unwrap();
+    let result = parse_program(&source);
+    println!("Result: {:?}", result);
+    assert!(result.is_ok());
+}

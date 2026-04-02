@@ -1,6 +1,6 @@
 use super::{EvalError, Evaluator};
 use crate::core::ast::{Literal, Term};
-use crate::runtime::net::{Agent, InteractionResult, Net, NodeId, PortIndex};
+use crate::runtime::net::{Agent, InteractionResult, Net, Node, NodeId, PortIndex};
 use crate::runtime::primitives::PrimVal;
 
 pub struct SequentialEvaluator {
@@ -27,6 +27,8 @@ impl Default for SequentialEvaluator {
 
 impl Evaluator for SequentialEvaluator {
     fn evaluate(&self, net: &mut Net) -> Result<Option<Term>, EvalError> {
+        wire_io_entry_point(net);
+
         let mut steps = 0;
 
         while steps < self.max_steps {
@@ -45,6 +47,27 @@ impl Evaluator for SequentialEvaluator {
         let result = extract_result(net);
         Ok(result)
     }
+}
+
+fn wire_io_entry_point(net: &mut Net) {
+    let Some((primio_id, _)) = net
+        .nodes()
+        .iter()
+        .enumerate()
+        .find(|(_, n)| matches!(n.agent, Agent::PrimIO(_)))
+    else {
+        return;
+    };
+
+    let primio_id = NodeId(primio_id);
+
+    if net.get_wire_at_port(primio_id, PortIndex(1)).is_some() {
+        return;
+    }
+
+    let token = Node::io_token();
+    let token_id = net.add_node(token);
+    net.connect(token_id, PortIndex(0), primio_id, PortIndex(1));
 }
 
 fn extract_result(net: &Net) -> Option<Term> {

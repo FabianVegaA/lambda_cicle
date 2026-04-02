@@ -783,7 +783,7 @@ cargo fmt
 **Step 4.3**: DOT Export - GraphViz net visualization
 **Step 4.4**: Benchmarking - Performance testing infrastructure
 
-### Phase 5a: Grammar Extensions ⏳ NEXT
+### Phase 5a: Grammar Extensions ✅ COMPLETE
 
 **Goal**: Implement grammar gaps required to parse module system and stdlib syntax
 
@@ -797,7 +797,7 @@ cargo fmt
 | Reference types (`& type_atom`) | §2.A.3 line 174 | ✅ DONE | HIGH |
 | Arrow types (`type -> type`) | §2.A.3 line 159 | ✅ DONE | HIGH |
 | Product types (`(type, type)`) | §2.A.3 line 176 | ✅ DONE | LOW |
-| `impl C for T` syntax | §2.A.5 line 225 | ⚠️ PENDING | HIGH |
+| `impl C for T` syntax | §2.A.5 line 225 | ✅ DONE | HIGH |
 | Constructor patterns | §2.A.5 | ✅ DONE | LOW |
 
 ---
@@ -859,7 +859,7 @@ cargo fmt
 
 | Feature | Priority |
 |---------|----------|
-| `impl C for T` syntax (vs `impl T : C`) | HIGH |
+| None - all complete | - |
 
 ### Phase 6: Standard Library ⏳ IN PROGRESS
 
@@ -940,21 +940,25 @@ Std.IO        -- Capability-based IO
 
 | Suite | Tests | Status |
 |-------|-------|--------|
-| Unit tests | 2 | ✅ PASS |
-| Parser tests | 9 | ✅ PASS |
-| Quickcheck tests | 35 | ✅ PASS |
-| Semiring tests | 6 | ✅ PASS |
-| **Total** | **52** | **✅ PASS** |
+| Unit tests | 12 | ✅ PASS |
+| Parser tests | 19 | ✅ PASS |
+| Quickcheck tests | 88 | ✅ PASS |
+| Semiring tests | 37 | ✅ PASS |
+| Property tests | 49 | ✅ PASS |
+| Interaction tests | 6 | ✅ PASS |
+| Stdlib parser tests | 13 | ✅ PASS |
+| String primitives tests | 17 | ✅ PASS |
+| **Total** | **~327** | **✅ PASS** |
 
 ### What's Next
 
-1. **Fix `impl C for T` syntax** (Phase 5a remaining item)
+1. Phase 5 & 5a: Complete ✅
 2. Phase 6: Complete stdlib modules (String, List, Map, Show, IO)
 3. Version 1.0 Release
 
 ---
 
-*Plan Version: 1.9*  
+*Plan Version: 1.10*  
 *Created: 2026-03-27*  
-*Updated: 2026-03-31*  
+*Updated: 2026-04-02*  
 *Status: Phase 6 IN PROGRESS*

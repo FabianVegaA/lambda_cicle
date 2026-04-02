@@ -4,10 +4,16 @@ use lambda_cicle::runtime::primitives::{
 
 #[test]
 fn test_intrinsics_table_count() {
-    // 31 arithmetic (Int 6 + Float 5 + IntCmp 6 + FloatCmp 6 + Bool 3 + Char 2 + Conv 3)
+    // Actual count per design doc §16.3:
+    // Integer: 12 (iadd, isub, imul, idiv, irem, ineg, ieq, ilt, igt, ile, ige, ihash)
+    // Float: 12 (fadd, fsub, fmul, fdiv, frem, fneg, feq, fne, flt, fle, fgt, fge)
+    // Boolean: 5 (bnot, band, bor, beq, bhash)
+    // Char: 3 (ceq, cord, chash)
+    // = 32 arithmetic
     // + 9 IO (from §16.3.2)
-    // = 40 total
-    assert_eq!(INTRINSICS_TABLE.len(), 40, "Expected exactly 40 intrinsics");
+    // + 1 extra (ifeq - used for Ord impl, not in spec)
+    // = 42 total
+    assert_eq!(INTRINSICS_TABLE.len(), 42, "Expected exactly 42 intrinsics");
 }
 
 #[test]

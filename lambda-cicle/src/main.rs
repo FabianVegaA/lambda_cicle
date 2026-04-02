@@ -1,5 +1,6 @@
 use clap::{Parser, Subcommand};
-use lambda_cicle::modules::{link, serialize_module, Exports, Module};
+use lambda_cicle::core::ast::Decl;
+use lambda_cicle::modules::{inject_prelude as lc_inject_prelude, Exports, Module};
 use lambda_cicle::runtime::evaluator::{Evaluator, SequentialEvaluator};
 use lambda_cicle::tools::{net_to_dot, run_benchmark, run_repl, TraceDebugger};
 use lambda_cicle::{parse, parse_program, translate, type_check_with_borrow_check, Term};
@@ -107,13 +108,28 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             if let Ok(mut decls) = decls_result {
                 // Inject prelude if not opted out
-                if let Err(e) = lambda_cicle::modules::inject_prelude(&mut decls) {
+                if let Err(e) = lc_inject_prelude(&mut decls) {
                     eprintln!("Warning: Could not load prelude: {}", e);
                 }
 
-                // For now, create an empty term - full decl support would require more work
-                term = Term::NativeLiteral(lambda_cicle::core::ast::Literal::Unit);
-                _ty = lambda_cicle::core::ast::Type::unit();
+                // Find the main entry point
+                let main_decl = decls.iter().find_map(|d| {
+                    if let Decl::ValDecl {
+                        name,
+                        term: main_term,
+                        ..
+                    } = d
+                    {
+                        if name == "main" {
+                            return Some((**main_term).clone());
+                        }
+                    }
+                    None
+                });
+
+                term = main_decl
+                    .unwrap_or_else(|| Term::NativeLiteral(lambda_cicle::core::ast::Literal::Unit));
+                _ty = type_check_with_borrow_check(&term)?;
             } else {
                 // Fall back to parsing as expression
                 term = parse(&source)?;
@@ -191,13 +207,28 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             if let Ok(mut decls) = decls_result {
                 // Inject prelude if not opted out
-                if let Err(e) = lambda_cicle::modules::inject_prelude(&mut decls) {
+                if let Err(e) = lc_inject_prelude(&mut decls) {
                     eprintln!("Warning: Could not load prelude: {}", e);
                 }
 
-                // For now, create an empty term - full decl support would require more work
-                term = Term::NativeLiteral(lambda_cicle::core::ast::Literal::Unit);
-                _ty = lambda_cicle::core::ast::Type::unit();
+                // Find the main entry point
+                let main_decl = decls.iter().find_map(|d| {
+                    if let Decl::ValDecl {
+                        name,
+                        term: main_term,
+                        ..
+                    } = d
+                    {
+                        if name == "main" {
+                            return Some((**main_term).clone());
+                        }
+                    }
+                    None
+                });
+
+                term = main_decl
+                    .unwrap_or_else(|| Term::NativeLiteral(lambda_cicle::core::ast::Literal::Unit));
+                _ty = type_check_with_borrow_check(&term)?;
             } else {
                 // Fall back to parsing as expression
                 term = parse(&source)?;

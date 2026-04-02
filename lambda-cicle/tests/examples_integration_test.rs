@@ -95,15 +95,17 @@ fn test_examples_have_main_expression() {
         let path = get_example_path(example);
         let source = std::fs::read_to_string(&path).expect(&format!("Failed to read {}", example));
 
-        // Check that the main expression (42) is present
+        // Check that there is a non-empty, non-comment last line (valid main expression)
+        let last_line = source
+            .lines()
+            .filter(|l| !l.trim().starts_with("--"))
+            .last()
+            .map(|l| l.trim())
+            .unwrap_or("");
+
         assert!(
-            source
-                .lines()
-                .last()
-                .map(|l| l.trim())
-                .unwrap_or("")
-                .ends_with("42"),
-            "{} should have 42 as main expression",
+            !last_line.is_empty(),
+            "{} should have a non-empty main expression",
             example
         );
     }

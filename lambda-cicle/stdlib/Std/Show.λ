@@ -1,7 +1,9 @@
 -- Std.Show - formatting trait
--- Layer 1 (depends on Prelude and String)
+-- Layer 1 (depends on Prelude and String per §16.1)
 
 use Std.Prelude
+use Std.String
+use Std.List
 
 pub trait Show a where
     val show : &a -> String
@@ -12,6 +14,9 @@ impl Show Bool with show = \b : &Bool. match b with { true => "true" | false => 
 impl Show Char with show = prim_char_to_string
 impl Show Unit with show = \_ : &Unit. "Unit"
 
+impl Show Ordering with show = \o : &Ordering.
+    match o with { LT => "LT" | EQ => "EQ" | GT => "GT" }
+
 impl Show (Option a) where Show a with show = \opt : &(Option a).
     match opt with { None => "None" | Some x => append "Some (" (append (show x) ")") }
 
@@ -20,5 +25,8 @@ impl Show (Result a e) where Show a, Show e with show = \r : &(Result a e).
 
 impl Show String with show = \s : &String. s
 
-impl Show Ordering with show = \o : &Ordering.
-    match o with { LT => "LT" | EQ => "EQ" | GT => "GT" }
+impl Show (List a) where Show a with show = \lst : &(List a).
+    match lst with { Nil => "[]" | Cons h t => append "[" (append (show_list_cont h t) "]") }
+
+val show_list_cont : a -> &List a -> String where Show a = \h : a. \t : &(List a).
+    match t with { Nil => show h | Cons h2 t2 => append (show h) (append "," (show_list_cont h2 t2)) }

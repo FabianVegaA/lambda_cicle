@@ -1,8 +1,8 @@
 -- Std.Prelude - Auto-imported prelude
--- Layer 0 (no dependencies)
+-- Layer 0 (no dependencies per §16.1)
+-- Design: §16.2
 
--- Native type stubs (§9.1) — Int, Float, Char are compiler primitives;
--- these declarations make them visible as nominal types in the AST.
+-- Native type stubs (§9.1) — Int, Float, Char are compiler primitives
 pub type Int (..)
 pub type Float (..)
 pub type Char (..)
@@ -10,17 +10,160 @@ pub type Char (..)
 -- ADT types (§16.2)
 pub type Bool (..) = True | False
 pub type Unit (..)
+pub type Option a (..) = None | Some a
+pub type Result a e (..) = Ok a | Err e
+pub type Ordering (..) = LT | EQ | GT
+pub type DivisionByZero (..) = DivisionByZero
 
--- Traits
+-- Boolean functions (§16.2)
+pub val not : Bool -> Bool = prim_not
+pub val and : Bool -> Bool -> Bool = prim_and
+pub val or : Bool -> Bool -> Bool = prim_or
+
+-- Equality and ordering traits (§16.2)
 pub trait Eq a where
     val eq : &a -> &a -> Bool
 
 pub trait Ord a where Eq a
-    val compare : &a -> &a -> Bool
+    val compare : &a -> &a -> Ordering
     val lt : &a -> &a -> Bool
     val gt : &a -> &a -> Bool
+    val lte : &a -> &a -> Bool
+    val gte : &a -> &a -> Bool
 
--- Implementations
-impl Eq for Bool with eq = \x : &Bool. \y : &Bool. True
-impl Eq for Int with eq = \x : &Int. \y : &Int. True
-impl Ord for Int with compare = \x : &Int. \y : &Int. True
+pub trait Hash a where Eq a
+    val hash : &a -> Int
+
+-- Memory and lifetime traits (§16.2) - load-bearing
+pub trait Clone a where
+    val clone : &a -> a
+
+pub trait Copy a where Clone a
+
+pub trait Drop a where
+    val drop : a -> Unit
+
+pub trait Sized a
+
+-- Arithmetic traits (§16.2)
+pub trait Add a where
+    val add : a -> a -> a
+
+pub trait Sub a where
+    val sub : a -> a -> a
+
+pub trait Mul a where
+    val mul : a -> a -> a
+
+pub trait Div a where
+    val div : a -> a -> Result a DivisionByZero
+
+pub trait Rem a where
+    val rem : a -> a -> Result a DivisionByZero
+
+pub trait Neg a where
+    val neg : a -> a
+
+-- Functor, Applicative, Monad hierarchy (§16.2)
+pub trait Functor f where
+    val fmap : (a -> b) -> f a -> f b
+
+pub trait Applicative f where Functor f
+    val pure : a -> f a
+    val apply : f (a -> b) -> f a -> f b
+
+pub trait Monad f where Applicative f
+    val bind : f a -> (a -> f b) -> f b
+    val then : f a -> f b -> f b
+
+-- Native type implementations (§16.2, Native Type Impl Matrix)
+impl Eq for Bool with eq = prim_beq
+impl Ord for Bool with compare = prim_beq
+impl Hash for Bool with hash = prim_bhash
+impl Clone for Bool with clone = \x : &Bool. x
+impl Copy for Bool
+impl Functor for Bool with fmap = \f : a -> b. \x : Bool. x
+impl Applicative for Bool with pure = \x : a. True, apply = \ff : Bool. \fx : Bool. ff
+impl Monad for Bool with bind = \m : Bool. \f : a -> Bool. m, then = \x : Bool. \y : Bool. y
+
+impl Eq for Int with eq = prim_ieq
+impl Ord for Int with compare = prim_ifeq
+impl Hash for Int with hash = prim_ihash
+impl Clone for Int with clone = \x : &Int. x
+impl Copy for Int
+impl Add for Int with add = prim_iadd
+impl Sub for Int with sub = prim_isub
+impl Mul for Int with mul = prim_imul
+impl Div for Int with div = prim_idiv
+impl Rem for Int with rem = prim_irem
+impl Neg for Int with neg = prim_ineg
+
+impl Eq for Float with eq = prim_feq
+impl Ord for Float with compare = prim_feq
+impl Clone for Float with clone = \x : &Float. x
+impl Copy for Float
+impl Add for Float with add = prim_fadd
+impl Sub for Float with sub = prim_fsub
+impl Mul for Float with mul = prim_fmul
+impl Div for Float with div = prim_fdiv
+impl Neg for Float with neg = prim_fneg
+
+impl Eq for Char with eq = prim_ceq
+impl Ord for Char with compare = prim_cord
+impl Hash for Char with hash = prim_chash
+impl Clone for Char with clone = \x : &Char. x
+impl Copy for Char
+
+impl Eq for Unit with eq = \x : &Unit. \y : &Unit. True
+impl Ord for Unit with compare = \x : &Unit. \y : &Unit. EQ
+impl Hash for Unit with hash = \x : &Unit. 0
+impl Clone for Unit with clone = \x : &Unit. Unit
+impl Copy for Unit
+
+impl Eq for Ordering with eq = \x : &Ordering. \y : &Ordering.
+    match x with { LT => match y with { LT => True | _ => False }
+        | EQ => match y with { EQ => True | _ => False }
+        | GT => match y with { GT => True | _ => False } }
+impl Ord for Ordering with compare = \x : &Ordering. \y : &Ordering.
+    match x with { LT => LT | EQ => match y with { GT => LT | _ => EQ }
+        | GT => match y with { LT => GT | _ => EQ } }
+impl Clone for Ordering with clone = \x : &Ordering. x
+impl Copy for Ordering
+
+-- Conditional impls for prelude types (§16.2)
+impl Eq (Option a) where Eq a with eq = \x : &(Option a). \y : &(Option a).
+    match x with { None => match y with { None => True | Some _ => False }
+        | Some x => match y with { None => False | Some y => eq x y } }
+impl Ord (Option a) where Ord a with compare = \x : &(Option a). \y : &(Option a).
+    match x with { None => match y with { None => EQ | Some _ => LT }
+        | Some x => match y with { None => GT | Some y => compare x y } }
+impl Clone (Option a) where Clone a with clone = \x : &(Option a).
+    match x with { None => None | Some x => Some (clone x) }
+impl Functor for Option with fmap = \f : a -> b. \opt : Option a.
+    match opt with { None => None | Some a => Some (f a) }
+impl Applicative for Option with
+    pure = \x : a. Some x,
+    apply = \opf : Option (a -> b). \opa : Option a.
+        match opf with { None => None | Some f => match opa with { None => None | Some a => Some (f a) } }
+impl Monad for Option with
+    bind = \m : Option a. \f : a -> Option b.
+        match m with { None => None | Some a => f a },
+    then = \x : Option a. \y : Option b.
+        match x with { None => None | Some _ => y }
+
+impl Eq (Result a e) where Eq a, Eq e with eq = \x : &(Result a e). \y : &(Result a e).
+    match x with { Err e => match y with { Err e2 => eq e e2 | _ => False }
+        | Ok a => match y with { Ok a2 => eq a a2 | _ => False } }
+impl Clone (Result a e) where Clone a, Clone e with clone = \x : &(Result a e).
+    match x with { Err e => Err (clone e) | Ok a => Ok (clone a) }
+impl Functor for (Result e) with fmap = \f : a -> b. \res : Result e a.
+    match res with { Err e => Err e | Ok a => Ok (f a) }
+impl Applicative for (Result e) with
+    pure = \x : a. Ok x,
+    apply = \rf : Result e (a -> b). \ra : Result e a.
+        match rf with { Err e => Err e | Ok f => match ra with { Err e => Err e | Ok a => Ok (f a) } }
+impl Monad for (Result e) with
+    bind = \m : Result e a. \f : a -> Result e b.
+        match m with { Err e => Err e | Ok a => f a },
+    then = \x : Result e a. \y : Result e b.
+        match x with { Err e => Err e | Ok _ => y }

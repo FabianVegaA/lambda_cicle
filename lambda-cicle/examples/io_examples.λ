@@ -76,4 +76,4 @@ use Std.Prelude
 --                     }) })
 
 -- Main expression (placeholder - actual IO requires runtime entry point)
-42
+println "Hello, World!"

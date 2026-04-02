@@ -1913,6 +1913,49 @@ The `IO_token` is created by the runtime at program entry and passed to `main`. 
 discarded when `main` returns. The token cannot be duplicated or erased — it does not
 implement `Clone` or `Drop` — so the runtime is the sole creator and final consumer.
 
+#### Program Entry Point
+
+Every λ◦ program has an implicit entry point named `main`. The runtime creates an
+`IO_token` at startup and wires it to `main`'s first argument before evaluation begins.
+After `main` returns, the token is discarded.
+
+**How `main` is determined:**
+
+- A file parsed as a **declaration block** (containing `val`, `type`, `trait`, `impl`
+  declarations) is scanned for a binding named `main` (`val main : <type> = <body>`).
+  If found, `<body>` is used as the program entry point.
+
+- A file parsed as a **bare expression** (no declarations) uses that expression as
+  `main` directly, wrapped implicitly as `val main = <expr>`.
+
+This means top-level expressions are valid programs:
+
+```lambda
+println "hello, world!"
+```
+
+...is equivalent to:
+
+```lambda
+val main : IO Unit = println "hello, world!"
+```
+
+**Runtime wiring:**
+
+At the start of evaluation, the evaluator performs the following wiring:
+
+1. Locate the first `PrimIO` node in the translated net (the entry IO operation).
+2. Create a fresh `IO_token` node.
+3. Wire `IO_token.port[0] → PrimIO.port[1]` (the token input port).
+
+When `PrimIO` fires, it consumes the token on port 1 and produces a fresh
+`IO_token` on port 1 of the *next* `PrimIO` in the chain, threading IO
+sequencing through data dependency in the net.
+
+**Return value:** The result of evaluating `main` is printed by the runtime's
+result extraction pass (`extract_result`). For `IO Unit` programs the final
+value is `Unit` and produces no output aside from side effects from IO actions.
+
 #### Type Definition and Monad Instance
 
 ```

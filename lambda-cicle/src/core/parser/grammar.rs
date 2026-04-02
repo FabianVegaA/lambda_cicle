@@ -122,10 +122,22 @@ impl<'a> Parser<'a> {
 
     fn parse_type_body(&mut self) -> Result<(Type, bool, Vec<Constructor>), ParseError> {
         // Decide whether this is a sum-type (constructors) or a type alias (plain type expr).
-        // A sum type starts with an uppercase identifier (e.g. True, Cons, Nil).
-        // Everything else (lowercase var, `(`, native type keyword) is a type alias.
-        let is_sum_type = matches!(self.peek(), Some(Token::Ident(name)) if
-            name.chars().next().map(|c| c.is_uppercase()).unwrap_or(false));
+        // A sum type starts with:
+        // - An uppercase identifier (e.g. True, Cons, Nil)
+        // - A keyword that represents a constructor (True, False)
+        // - Known lowercase constructors: None, Some, Ok, Err, LT, EQ, GT
+        let is_sum_type = match self.peek() {
+            Some(Token::Ident(name)) => {
+                let known_ctors = ["None", "Some", "Ok", "Err", "LT", "EQ", "GT"];
+                name.chars()
+                    .next()
+                    .map(|c| c.is_uppercase())
+                    .unwrap_or(false)
+                    || known_ctors.contains(&name.as_str())
+            }
+            Some(Token::KwTrue) | Some(Token::KwFalse) => true,
+            _ => false,
+        };
 
         if !is_sum_type {
             // Type alias: parse as a full type expression (supports arrows, tuples, type apps)
@@ -948,7 +960,10 @@ impl<'a> Parser<'a> {
                 | Some(&Token::TyChar)
                 | Some(&Token::KwUnit)
                 | Some(&Token::LParen)
-        ) || matches!(self.peek(), Some(&Token::Ident(_)))
+                | Some(&Token::KwTrue)  // Bool constructors
+                | Some(&Token::KwFalse)
+                | Some(&Token::Ident(_)) // All identifiers (both uppercase constructors and lowercase type variables)
+        )
     }
 
     fn ty_atom(&mut self) -> Result<Type, ParseError> {
@@ -987,6 +1002,14 @@ impl<'a> Parser<'a> {
                 } else {
                     Ok(Type::inductive(name, vec![]))
                 }
+            }
+            Some(Token::KwTrue) => {
+                self.advance();
+                Ok(Type::inductive("True".to_string(), vec![]))
+            }
+            Some(Token::KwFalse) => {
+                self.advance();
+                Ok(Type::inductive("False".to_string(), vec![]))
             }
             Some(Token::LParen) => {
                 self.consume(&Token::LParen)?;
@@ -1123,6 +1146,14 @@ impl<'a> Parser<'a> {
             Some(Token::KwUnit) => {
                 self.advance();
                 Ok("Unit".to_string())
+            }
+            Some(Token::KwTrue) => {
+                self.advance();
+                Ok("True".to_string())
+            }
+            Some(Token::KwFalse) => {
+                self.advance();
+                Ok("False".to_string())
             }
             Some(token) => Err(ParseError::ExpectedToken {
                 expected: "identifier".to_string(),

@@ -1,13 +1,14 @@
 -- Std.IO - capability-based IO
--- Layer 3 (depends on Prelude, String, Show)
+-- Layer 3 (depends on Prelude, String, Show per §16.1)
 
 use Std.Prelude
+use Std.String
 
 pub type IO a
 pub type File
 pub type IOError (..) = NotFound | PermissionDenied | UnexpectedEOF | Other String
 
--- IO primitives (implemented in Rust via PrimIO)
+-- IO primitives (implemented in Rust via PrimIO per §16.3.2)
 val prim_io_print : &String -> IO Unit
 val prim_io_println : &String -> IO Unit
 val prim_io_read_line : IO (Result String IOError)
@@ -16,7 +17,7 @@ val prim_io_close : File -> IO Unit
 val prim_io_read : &File -> IO (Result String IOError)
 val prim_io_write : &File -> &String -> IO (Result Unit IOError)
 
--- Standard streams
+-- Standard streams (§16.8)
 pub val print : &String -> IO Unit = prim_io_print
 pub val println : &String -> IO Unit = prim_io_println
 pub val read_line : IO (Result String IOError) = prim_io_read_line
@@ -25,10 +26,7 @@ pub val close : File -> IO Unit = prim_io_close
 pub val read : &File -> IO (Result String IOError) = prim_io_read
 pub val write : &File -> &String -> IO (Result Unit IOError) = prim_io_write
 
--- Monad IO
--- bind : IO a -> (a -> IO b) -> IO b
--- bind m f = \token. let (token', a) = m token in f a token'
--- pure x = \token. (token, x)
+-- Monad IO (§16.8)
 impl Functor for IO with fmap = \f : a -> b. \io : IO a. bind io (\x : a. pure (f x))
 impl Applicative for IO with
     pure = \x : a. \token : 1:Unit. (token, x)
@@ -37,7 +35,7 @@ impl Monad for IO with
     bind = \m : IO a. \f : a -> IO b. \token : 1:Unit. (token, ())
     then = \x : IO a. \y : IO b. bind x (\_:a. y)
 
--- IOError impls
+-- IOError Show impl (in IO module per orphan rule - type defined here)
 impl Show IOError with show = \e : &IOError.
     match e with { NotFound => "File not found"
         | PermissionDenied => "Permission denied"
@@ -45,7 +43,7 @@ impl Show IOError with show = \e : &IOError.
         | Other s => s }
 
 impl Eq IOError with eq = \e1 : &IOError. \e2 : &IOError.
-    match e1 with { NotFound => match e2 with { NotFound => true | _ => false }
-        | PermissionDenied => match e2 with { PermissionDenied => true | _ => false }
-        | UnexpectedEOF => match e2 with { UnexpectedEOF => true | _ => false }
-        | Other s1 => match e2 with { Other s2 => eq s1 s2 | _ => false } }
+    match e1 with { NotFound => match e2 with { NotFound => True | _ => False }
+        | PermissionDenied => match e2 with { PermissionDenied => True | _ => False }
+        | UnexpectedEOF => match e2 with { UnexpectedEOF => True | _ => False }
+        | Other s1 => match e2 with { Other s2 => eq s1 s2 | _ => False } }
