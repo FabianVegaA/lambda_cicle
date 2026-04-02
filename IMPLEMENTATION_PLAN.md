@@ -863,80 +863,252 @@ cargo fmt
 
 ### Phase 6: Standard Library ⏳ IN PROGRESS
 
-**Goal**: Implement stdlib per §16 of design document v2.4
+**Goal**: Verify and test stdlib modules against design document v2.4 (§16)
 
-#### Stdlib Structure (§16)
+**Status**: Parser fixes complete, intrinsics aligned, stdlib verification in progress
+
+#### Stdlib Structure (§16.1 - Five Layer Hierarchy)
 
 ```
-Std.Prelude   -- auto-imported (types, traits, native impls)
-Std.String    -- Linear string type
-Std.List      -- Singly-linked list
-Std.Map       -- Persistent map (balanced tree)
-Std.Show      -- Debug formatting trait
-Std.IO        -- Capability-based IO
+Layer 0: Std.Prelude        -- auto-imported, NO dependencies
+Layer 1: Std.String         -- depends on Prelude only
+         Std.Show           -- depends on Prelude, String
+Layer 2: Std.List           -- depends on Layer 0-1
+         Std.Map            -- depends on Layer 0-1
+Layer 3: Std.IO             -- depends on Layer 0-2
 ```
 
-#### Prelude Contents (§16.1)
+#### Prelude Contents (§16.2)
 
 **Minimal auto-imported** (cannot depend on stdlib):
-- Native types: `Bool`, `Unit`
+- Native types: `Bool`, `Unit`, `Int`, `Float`, `Char`
 - Option/Result types: `Option a`, `Result a e`, `Ordering`, `DivisionByZero`
-- Arithmetic traits: `Add`, `Sub`, `Mul`, `Div`, `Rem`, `Neg`, `Eq`, `Ord`, `Hash`, `Clone`, `Copy`, `Drop`, `Sized`
+- Arithmetic traits: `Add`, `Sub`, `Mul`, `Div`, `Rem`, `Neg`, `Eq`, `Ord`, `Hash`, `Clone`
 - `Functor`, `Applicative`, `Monad` hierarchy
 - `prim_*` wrappers (internal, §16.3)
 
 #### Primitive Intrinsics (§16.3)
 
-**Closed set of 30 intrinsics** - any `prim_*` not in this table is `UnknownPrimitive` at Gate 5:
+**Closed set of 42 intrinsics** aligned with design doc §16.3.1-16.3.2:
 
-| Category | Operations |
-|----------|------------|
-| Arithmetic | `prim_iadd`, `prim_isub`, `prim_imul`, `prim_idiv`, `prim_irem`, `prim_ineg` |
-| Float arithmetic | `prim_fadd`, `prim_fsub`, `prim_fmul`, `prim_fdiv`, `prim_fneg` |
-| Comparison | `prim_ieq`, `prim_ifeq`, `prim_igt`, `prim_ige`, `prim_ilt`, `prim_ile` |
-| Float comparison | `prim_feq`, `prim_fne`, `prim_fgt`, `prim_fge`, `prim_flt`, `prim_fle` |
-| Boolean | `prim_not`, `prim_and`, `prim_or` |
-| Char | `prim_chr`, `prim_ord` |
-| IO | `prim_print`, `prim_read_line`, `prim_open_file`, `prim_close_file`, `prim_file_write` |
+| Category | Count | Operations |
+|----------|-------|------------|
+| Integer arithmetic | 7 | `prim_iadd`, `prim_isub`, `prim_imul`, `prim_idiv`, `prim_irem`, `prim_ineg`, `prim_ihash` |
+| Integer comparison | 6 | `prim_ieq`, `prim_ifeq`, `prim_igt`, `prim_ige`, `prim_ilt`, `prim_ile` |
+| Float arithmetic | 6 | `prim_fadd`, `prim_fsub`, `prim_fmul`, `prim_fdiv`, `prim_frem`, `prim_fneg` |
+| Float comparison | 6 | `prim_feq`, `prim_fne`, `prim_fgt`, `prim_fge`, `prim_flt`, `prim_fle` |
+| Boolean | 5 | `prim_bnot`, `prim_band`, `prim_bor`, `prim_beq`, `prim_bhash` |
+| Char | 3 | `prim_ceq`, `prim_cord`, `prim_chash` |
+| IO | 9 | `prim_io_print`, `prim_io_println`, `prim_io_eprint`, `prim_io_eprintln`, `prim_io_read_line`, `prim_io_open`, `prim_io_close`, `prim_io_read`, `prim_io_write` |
+| **Total** | **42** | **(33 arithmetic + 9 IO)** |
 
-#### IO Model (§16.4)
+#### IO Model (§16.8)
 
 - `IO a`: monadic type describing effectful computation
 - `IO_token`: linear agent for sequencing (not visible to user code)
 - `PrimIO(op)`: 3-port agent consuming/producing `IO_token`
 - `File`: linear type requiring explicit `close` (forgotten close = `LinearityViolation`)
 
-#### Completed Steps
+#### Completed Steps (2026-04-02)
 
 | Step | Description | Status |
 |------|-------------|--------|
-| 6.1 | Prelude types (Bool, Unit, Option, Result, Ordering, DivisionByZero) | ✅ DONE |
-| 6.2 | Prelude trait declarations (Eq, Ord, Hash, Clone, Copy, Drop, Sized, Add, Sub, Mul, Div, Rem, Neg) | ✅ DONE |
-| 6.3 | Native type impls (Int, Float, Bool, Char, Unit, Ordering) | ✅ DONE |
-| 6.4 | CLI build supports parse_program for declarations | ✅ DONE |
-| 6.5 | Grammar fixes for type keywords as type names | ✅ DONE |
-| 6.6 | Functor/Applicative/Monad hierarchy | ✅ DONE |
-| 6.7 | `prim_*` wrappers | ✅ DONE |
+| 6.1 | Fixed parser: constructor type arguments (`Ok a`, `Some a`) | ✅ DONE |
+| 6.2 | Fixed parser: impl block multi-method parsing (comma-separated) | ✅ DONE |
+| 6.3 | Cleaned up Prelude.λ (removed invalid val declarations) | ✅ DONE |
+| 6.4 | Aligned INTRINSICS_TABLE with spec (42 intrinsics) | ✅ DONE |
+| 6.5 | All 342 tests passing | ✅ DONE |
+| 6.6 | Stdlib module verification started | ⏳ IN PROGRESS |
 
-#### Implementation Steps
+#### Stdlib Module Verification Status
 
-**Step 6.1**: Prelude types ✅ DONE
+| Module | Layer | Status | Issues Found |
+|--------|-------|--------|--------------|
+| **Std.Prelude** | 0 | ✅ COMPLETE | 171 lines, all tests pass |
+| **Std.List** | 2 | ⚠️ MOSTLY COMPLETE | Missing: `singleton`, `head_ref`, `Ord` impl (3 items) |
+| **Std.Map** | 2 | ⚠️ API MISMATCH | Missing: `remove`, `map_vals`, `filter`, `fold`, `Show` impl; `lookup` should be `get` (5 items) |
+| **Std.String** | 1 | ❌ INCOMPLETE STUB | Only type signatures, no implementations; comment: "String not yet native" |
+| **Std.Show** | 1 | ❌ BLOCKED | Uses `prim_*_to_string` intrinsics removed from table; blocked by String |
+| **Std.IO** | 3 | ⚠️ NEEDS WORK | Missing `eprint`, `eprintln`; monad impls are stubs |
 
-**Step 6.2**: Prelude trait declarations ✅ DONE
+#### Phase 6 Detailed Implementation Plan
 
-**Step 6.3**: Grammar enhancements ✅ DONE
+**Priority Order**: Task 4 → Task 3 → Task 1 → Task 2
 
-**Step 6.4**: Implement Std.String
+---
 
-**Step 6.5**: Implement Std.List
+##### **TASK 4: End-to-End Intrinsics Tests (PRIORITY 1)**
 
-**Step 6.6**: Implement Std.Map
+**Estimated effort**: 3-4 hours
 
-**Step 6.7**: Implement Std.Show
+**Deliverables**:
+1. `tests/arithmetic_intrinsics_e2e_test.rs` - 31 tests covering all arithmetic intrinsics
+2. `tests/io_intrinsics_e2e_test.rs` - 9 tests covering all IO intrinsics
 
-**Step 6.8**: Implement Std.IO
+**Approach**: 
+- Write `.λ` source snippets exercising each intrinsic via Prelude/stdlib wrappers
+- Parse → translate → evaluate → verify results
+- Ensures all 42 intrinsics work end-to-end through the full compilation pipeline
 
-### Test Coverage
+**Test structure**:
+```rust
+#[test]
+fn test_iadd_e2e() {
+    let source = "add 3 5"; // Uses Prelude Add trait
+    let result = parse_and_eval(source);
+    assert_eq!(result, PrimVal::Int(8));
+}
+```
+
+**Coverage**:
+- Integer ops (12): iadd, isub, imul, idiv, irem, ineg, ieq, ifeq, ilt, igt, ile, ige, ihash
+- Float ops (11): fadd, fsub, fmul, fdiv, frem, fneg, feq, fne, flt, fgt, fle, fge
+- Bool ops (5): bnot, band, bor, beq, bhash
+- Char ops (3): ceq, cord, chash
+- IO ops (9): print, println, eprint, eprintln, read_line, open, close, read, write
+
+---
+
+##### **TASK 3: Module Loading and DAG Verification (PRIORITY 2)**
+
+**Estimated effort**: 6.5-8.5 hours
+
+**Current status**: 
+- ✅ Module loader exists (`src/modules/loader.rs`)
+- ❌ No DAG verification implemented
+- ❌ No cyclic import detection
+
+**Deliverables**:
+1. DAG cycle detection implementation (if missing)
+2. `tests/module_loading_test.rs` - 8-10 tests
+3. `tests/stdlib_layers_test.rs` - 5-6 tests
+
+**Per design doc §11.3 (line 819)**:
+> "The module graph must be a **DAG**. Cyclic imports are detected at Gate 2 before typechecking and reported as `CycleDetected` with all modules in the cycle listed."
+
+**Implementation approach**:
+1. Parse `use` statements from each module to build import graph
+2. Topological sort with cycle detection (DFS with visited/visiting/visited states)
+3. Track path during DFS to report full cycle
+4. Error type: `ModuleError::CycleDetected { cycle: Vec<String> }`
+
+**Test cases**:
+
+*Module Loading Tests*:
+- Load stdlib layers in topological order (valid DAG)
+- Detect simple two-way cycle (A → B → A)
+- Detect three-way cycle (A → B → C → A)
+- Diamond dependency (A → B/C, B/C → D) - valid DAG
+- Self-import detection (A imports A)
+- Module not found error
+
+*Stdlib Layer Tests*:
+- Verify Prelude has no imports (Layer 0)
+- Verify String/Show only import Prelude (Layer 1)
+- Verify List/Map respect Layer 2 dependencies
+- Verify IO respects Layer 3 dependencies
+- Detect violations of layer hierarchy
+
+---
+
+##### **TASK 1: Fix Stdlib Modules (PRIORITY 3)**
+
+**Estimated effort**: 2.5 hours
+
+**Deliverables**:
+1. `stdlib/Std/List.λ` - add 3 missing items
+2. `stdlib/Std/Map.λ` - add 5 missing functions, rename `lookup` → `get`
+3. Tests verifying new functions work
+
+**Std.List fixes** (0.5 hour):
+1. Add `singleton : a -> List a`
+2. Add `head_ref : &List a -> Option &a` (borrow head without consuming)
+3. Add `Ord` impl for lexicographic comparison
+
+**Std.Map fixes** (2 hours):
+1. Rename `lookup` → `get` (spec §16.7 line 1841)
+2. Add `remove : &k -> Map k v -> (Option v, Map k v)` (ownership extraction)
+3. Add `map_vals : (v -> w) -> Map k v -> Map k w`
+4. Add `filter : (&k -> &v -> Bool) -> Map k v -> Map k v`
+5. Add `fold : (b -> k -> v -> b) -> b -> Map k v -> b`
+6. Fix `keys` signature: spec wants `&(Map k v) -> List &k` (borrows), impl returns `List k` (consumes)
+   - **Decision needed**: Match spec exactly (complex) or document deviation?
+7. Add `Show` impl (blocked by String implementation - may defer)
+
+---
+
+##### **TASK 2: String/Show Implementation (PRIORITY 4 - HARDEST)**
+
+**Current blockers**:
+1. Std.String is a stub (comment: "String not yet native")
+2. Std.Show uses `prim_int_to_string`, `prim_float_to_string`, `prim_char_to_string` - removed from INTRINSICS_TABLE
+3. Design doc §16.4 specifies String API but §16.3 doesn't list string intrinsics
+
+**Three Options**:
+
+**Option A: Make String a native type with intrinsics** (6-8 hours)
+- Add to INTRINSICS_TABLE: `prim_*_to_string` conversions, `prim_string_concat`, `prim_string_length`, `prim_string_eq`, `prim_string_hash`
+- Implement in `runtime/primitives/operations.rs`
+- Update `PrimVal::String` to have `NativeKind::String` (currently returns `Unit`)
+- Implement Std.String using new intrinsics
+- Update Std.Show to use restored intrinsics
+
+**Option B: Implement String as `List Char`** (4-5 hours)
+- Define in Prelude: `type String = List Char`
+- Implement Std.String operations using List functions
+- Show impl converts via List operations
+- **Problem**: Spec §16.4 treats String as distinct type, not alias
+
+**Option C: Defer String implementation** (1 hour - RECOMMENDED)
+- Document that String/Show are incomplete in Phase 6
+- Mark as "stub" modules with TODO comments
+- Create tracking issue for Phase 7 or v1.1
+- **Rationale**: 
+  - String design unclear in spec (API defined but no intrinsics listed)
+  - Significant implementation work (4-8 hours)
+  - Phase 6 goal is verification/testing - can document incompleteness
+  - Unblocks other work (Tasks 1, 3, 4 don't need String)
+  - Better to get design right than rush implementation
+
+**Recommendation**: Choose Option C (defer) to unblock Phase 6 completion.
+
+---
+
+#### Implementation Steps Summary
+
+| Task | Priority | Effort | Dependencies |
+|------|----------|--------|--------------|
+| Task 4: E2E intrinsics tests | 1 | 3-4 hrs | None - ready to execute |
+| Task 3: Module loading & DAG | 2 | 6.5-8.5 hrs | Needs investigation first |
+| Task 1: Fix List/Map | 3 | 2.5 hrs | None - ready to execute |
+| Task 2 (Option C): Defer String | 4 | 1 hr | Documentation only |
+| Task 2 (Option A): Implement String | 4 | 6-8 hrs | Alternative if needed |
+
+**Total effort (with Option C)**: 12-15 hours  
+**Total effort (with Option A)**: 18-23 hours
+
+---
+
+#### Open Questions
+
+1. **Task 2 (String)**: Option A (implement, 6-8 hrs) or Option C (defer, 1 hr)? **Recommended: Option C**
+2. **Map.keys borrow semantics**: Match spec exactly (`&Map -> List &k`) or document deviation?
+3. **Commit strategy**: One commit per milestone or at end?
+
+---
+
+#### Next Actions
+
+1. Execute Task 4: Create end-to-end intrinsics tests (40 tests)
+2. Execute Task 3: Implement DAG verification and module loading tests
+3. Execute Task 1: Fix Std.List and Std.Map per spec
+4. Resolve Task 2: Defer String or implement (pending decision)
+5. Update this plan with completion status
+6. Mark Phase 6 complete or note deferrals for Phase 7
+
+---
+
+## Test Coverage
 
 | Suite | Tests | Status |
 |-------|-------|--------|
@@ -947,18 +1119,62 @@ Std.IO        -- Capability-based IO
 | Property tests | 49 | ✅ PASS |
 | Interaction tests | 6 | ✅ PASS |
 | Stdlib parser tests | 13 | ✅ PASS |
-| String primitives tests | 17 | ✅ PASS |
-| **Total** | **~327** | **✅ PASS** |
+| Prelude loader tests | 6 | ✅ PASS |
+| Examples integration tests | 8 | ✅ PASS |
+| Constructor tests | 29 | ✅ PASS |
+| IO integration tests | 18 | ✅ PASS |
+| Primitives tests | 57 | ✅ PASS |
+| **Total** | **342** | **✅ PASS** |
 
-### What's Next
+### Planned Test Additions (Phase 6)
 
-1. Phase 5 & 5a: Complete ✅
-2. Phase 6: Complete stdlib modules (String, List, Map, Show, IO)
-3. Version 1.0 Release
+| Suite | Tests | Status |
+|-------|-------|--------|
+| Arithmetic intrinsics E2E | 31 | 📋 PLANNED |
+| IO intrinsics E2E | 9 | 📋 PLANNED |
+| Module loading tests | 8-10 | 📋 PLANNED |
+| Stdlib layers tests | 5-6 | 📋 PLANNED |
+| **Phase 6 Total** | **53-56** | **📋 PLANNED** |
+| **Grand Total** | **395-398** | **Target** |
 
 ---
 
-*Plan Version: 1.10*  
+## What's Next
+
+1. **Phase 6 Tasks** (in priority order):
+   - Task 4: End-to-end intrinsics tests (3-4 hrs)
+   - Task 3: Module loading & DAG verification (6.5-8.5 hrs)
+   - Task 1: Fix List/Map stdlib issues (2.5 hrs)
+   - Task 2: String/Show resolution (1 hr defer or 6-8 hrs implement)
+
+2. **Phase 7**: Concurrency primitives and S5' verification
+
+3. **Version 1.0 Release**
+
+---
+
+## Tracking Issues
+
+### Phase 6 Deferred Items
+
+**String Type Implementation** (deferred to Phase 7)
+- **Context**: Design doc §16.4 specifies String API but doesn't define implementation strategy
+- **Decision needed**: Native type with intrinsics (6-8 hrs) OR List Char alias (4-5 hrs)
+- **Blocked tasks**:
+  - Std.String implementation
+  - Std.Show trait implementations
+  - Map.Show impl
+  - String literal support in examples
+- **Estimated effort**: 6-8 hours (Option A: native) or 4-5 hours (Option B: List Char)
+
+**Map.keys Borrow Semantics** (design decision needed)
+- **Spec**: `keys : &(Map k v) -> List &k` (borrows keys from map)
+- **Current**: `keys : Map k v -> List k` (consumes map, copies keys)
+- **Decision needed**: Match spec exactly (complex) or document deviation (pragmatic)?
+
+---
+
+*Plan Version: 1.11*  
 *Created: 2026-03-27*  
-*Updated: 2026-04-02*  
+*Updated: 2026-04-02 (Phase 6 detailed plan added)*  
 *Status: Phase 6 IN PROGRESS*

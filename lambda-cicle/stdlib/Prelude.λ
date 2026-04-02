@@ -87,7 +87,10 @@ impl Applicative for Bool with pure = \x : a. True, apply = \ff : Bool. \fx : Bo
 impl Monad for Bool with bind = \m : Bool. \f : a -> Bool. m, then = \x : Bool. \y : Bool. y
 
 impl Eq for Int with eq = prim_ieq
-impl Ord for Int with compare = prim_ifeq
+impl Ord for Int with compare = \x : &Int. \y : &Int.
+    match prim_igt x y with
+        { True => GT | False => match prim_ieq x y with
+            { True => EQ | False => LT } }
 impl Hash for Int with hash = prim_ihash
 impl Clone for Int with clone = \x : &Int. x
 impl Copy for Int
@@ -99,7 +102,10 @@ impl Rem for Int with rem = prim_irem
 impl Neg for Int with neg = prim_ineg
 
 impl Eq for Float with eq = prim_feq
-impl Ord for Float with compare = prim_feq
+impl Ord for Float with compare = \x : &Float. \y : &Float.
+    match prim_fgt x y with
+        { True => GT | False => match prim_feq x y with
+            { True => EQ | False => LT } }
 impl Clone for Float with clone = \x : &Float. x
 impl Copy for Float
 impl Add for Float with add = prim_fadd

@@ -2,6 +2,7 @@ use super::{Exports, Module, ModuleError};
 use crate::core::ast::Decl;
 use crate::traits::Implementation;
 use crate::{parse, parse_program, translate, type_check_with_borrow_check, Term};
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::sync::OnceLock;
 
@@ -205,4 +206,221 @@ pub fn load_module(path: &Path) -> Result<Module, ModuleError> {
 
     let term = parse_module_file(path)?;
     compile_module(name, term)
+}
+
+#[derive(Debug, Clone)]
+pub struct ImportGraph {
+    edges: HashMap<String, Vec<String>>,
+}
+
+impl ImportGraph {
+    pub fn new() -> Self {
+        Self {
+            edges: HashMap::new(),
+        }
+    }
+
+    pub fn add_module(&mut self, module: &str) {
+        self.edges
+            .entry(module.to_string())
+            .or_insert_with(Vec::new);
+    }
+
+    pub fn add_import(&mut self, from: &str, to: &str) {
+        self.edges
+            .entry(from.to_string())
+            .or_insert_with(Vec::new)
+            .push(to.to_string());
+    }
+
+    pub fn get_imports(&self, module: &str) -> Vec<String> {
+        self.edges.get(module).cloned().unwrap_or_default()
+    }
+
+    pub fn get_modules(&self) -> Vec<String> {
+        self.edges.keys().cloned().collect()
+    }
+}
+
+impl Default for ImportGraph {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+pub fn extract_imports(decls: &[Decl]) -> Vec<(String, String)> {
+    let mut imports = Vec::new();
+    let mut current_module = String::from("__main__");
+
+    for decl in decls {
+        match decl {
+            Decl::UseDecl { path, .. } => {
+                let target = path.join(".");
+                imports.push((current_module.clone(), target));
+            }
+            Decl::TypeDecl { name, .. } => {
+                current_module = name.clone();
+            }
+            _ => {}
+        }
+    }
+
+    imports
+}
+
+#[derive(Debug, Clone)]
+pub struct CycleInfo {
+    pub modules: Vec<String>,
+}
+
+impl std::fmt::Display for CycleInfo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Cycle detected: ")?;
+        for (i, module) in self.modules.iter().enumerate() {
+            if i > 0 {
+                write!(f, " -> ")?;
+            }
+            write!(f, "{}", module)?;
+        }
+        Ok(())
+    }
+}
+
+pub fn detect_cycles(graph: &ImportGraph) -> Option<CycleInfo> {
+    let modules: Vec<String> = graph.get_modules();
+    let mut visited: HashSet<String> = HashSet::new();
+    let mut in_stack: HashSet<String> = HashSet::new();
+    let mut path: Vec<String> = Vec::new();
+
+    fn dfs(
+        graph: &ImportGraph,
+        node: &str,
+        visited: &mut HashSet<String>,
+        in_stack: &mut HashSet<String>,
+        path: &mut Vec<String>,
+    ) -> Option<CycleInfo> {
+        visited.insert(node.to_string());
+        in_stack.insert(node.to_string());
+        path.push(node.to_string());
+
+        for neighbor in graph.get_imports(node) {
+            if !visited.contains(&neighbor) {
+                if let Some(cycle) = dfs(graph, &neighbor, visited, in_stack, path) {
+                    return Some(cycle);
+                }
+            } else if in_stack.contains(&neighbor) {
+                if let Some(pos) = path.iter().position(|m| m == &neighbor) {
+                    let mut cycle_modules: Vec<String> = path[pos..].iter().cloned().collect();
+                    cycle_modules.push(neighbor.clone());
+                    return Some(CycleInfo {
+                        modules: cycle_modules,
+                    });
+                }
+            }
+        }
+
+        path.pop();
+        in_stack.remove(node);
+        None
+    }
+
+    for module in &modules {
+        if !visited.contains(module) {
+            if let Some(cycle) = dfs(graph, module, &mut visited, &mut in_stack, &mut path) {
+                return Some(cycle);
+            }
+        }
+    }
+
+    None
+}
+
+pub fn verify_no_cycles(decls: &[Decl]) -> Result<(), ModuleError> {
+    let imports = extract_imports(decls);
+
+    let mut graph = ImportGraph::new();
+    for (from, to) in &imports {
+        graph.add_import(from, to);
+    }
+
+    if let Some(cycle) = detect_cycles(&graph) {
+        return Err(ModuleError {
+            message: format!("{}", cycle),
+        });
+    }
+
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_extract_imports_simple() {
+        let source = r#"
+use Std.List
+use Std.Map
+"#;
+        let decls = parse_program(source).unwrap();
+        let imports = extract_imports(&decls);
+        assert_eq!(imports.len(), 2);
+        assert!(imports.contains(&("__main__".to_string(), "Std.List".to_string())));
+        assert!(imports.contains(&("__main__".to_string(), "Std.Map".to_string())));
+    }
+
+    #[test]
+    fn test_detect_simple_cycle() {
+        let mut graph = ImportGraph::new();
+        graph.add_module("A");
+        graph.add_module("B");
+        graph.add_import("A", "B");
+        graph.add_import("B", "A");
+
+        let cycle = detect_cycles(&graph);
+        assert!(cycle.is_some());
+        let cycle = cycle.unwrap();
+        assert!(cycle.modules.contains(&"A".to_string()));
+        assert!(cycle.modules.contains(&"B".to_string()));
+    }
+
+    #[test]
+    fn test_detect_three_way_cycle() {
+        let mut graph = ImportGraph::new();
+        graph.add_module("A");
+        graph.add_module("B");
+        graph.add_module("C");
+        graph.add_import("A", "B");
+        graph.add_import("B", "C");
+        graph.add_import("C", "A");
+
+        let cycle = detect_cycles(&graph);
+        assert!(cycle.is_some());
+    }
+
+    #[test]
+    fn test_diamond_dependency_no_cycle() {
+        let mut graph = ImportGraph::new();
+        graph.add_module("A");
+        graph.add_module("B");
+        graph.add_module("C");
+        graph.add_module("D");
+        graph.add_import("A", "B");
+        graph.add_import("A", "C");
+        graph.add_import("B", "D");
+        graph.add_import("C", "D");
+
+        let cycle = detect_cycles(&graph);
+        assert!(cycle.is_none());
+    }
+
+    #[test]
+    fn test_self_import() {
+        let mut graph = ImportGraph::new();
+        graph.add_module("A");
+        graph.add_import("A", "A");
+
+        let cycle = detect_cycles(&graph);
+        assert!(cycle.is_some());
+    }
 }
