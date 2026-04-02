@@ -5,9 +5,10 @@ use Std.Prelude
 
 pub type List a (..) = Nil | Cons a (List a)
 
--- Constructors
+-- Construction
 pub val nil : List a = Nil
 pub val cons : a -> List a -> List a = \x : a. \xs : List a. Cons x xs
+pub val singleton : a -> List a = \x : a. Cons x Nil
 
 -- Deconstruction
 pub val head : List a -> Option a = \xs : List a.
@@ -25,6 +26,9 @@ pub val is_empty : &List a -> Bool = \xs : &(List a).
 
 pub val length : &List a -> Int = \xs : &(List a).
     match xs with { Nil => 0 | Cons _ t => add 1 (length t) }
+
+pub val head_ref : &List a -> Option &a = \xs : &(List a).
+    match xs with { Nil => None | Cons h _ => Some h }
 
 -- Transformation
 pub val map : (a -> b) -> List a -> List b = \f : a -> b. \xs : List a.
@@ -79,3 +83,10 @@ impl Eq for (List a) where Eq a with eq = \xs : &(List a). \ys : &(List a).
             and (eq hx hy) (eq tx ty) } }
 
 impl Clone for (List a) where Clone a with clone = map clone
+
+impl Ord for (List a) where Ord a with compare = \xs : &(List a). \ys : &(List a).
+    match xs with { Nil =>
+        match ys with { Nil => EQ | Cons _ _ => LT } | Cons hx tx =>
+        match ys with { Nil => GT | Cons hy ty =>
+            match compare hx hy with {
+                LT => LT | GT => GT | EQ => compare tx ty } } }

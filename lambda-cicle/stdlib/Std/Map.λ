@@ -60,13 +60,15 @@ pub val insert : k -> v -> Map k v -> Map k v = \key : k. \val : v. \t : Map k v
                 balance (Node l k v (insert key val r) 0)
                 | False => Node l key val r 0 } } }
 
-pub val lookup : &k -> &Map k v -> Option v = \key : &k. \t : &(Map k v).
+pub val get : &k -> &Map k v -> Option &v = \key : &k. \t : &(Map k v).
     match t with { Empty => None
         | Node l k v r _ =>
-        match lt key k with { True => lookup key l
+        match lt key k with { True => get key l
             | False =>
-            match gt key k with { True => lookup key r
+            match gt key k with { True => get key r
                 | False => Some v } } }
+
+pub val lookup : &k -> &Map k v -> Option &v = get
 
 pub val delete : k -> Map k v -> Map k v = \key : k. \t : Map k v.
     match t with { Empty => Empty
@@ -84,6 +86,19 @@ pub val delete : k -> Map k v -> Map k v = \key : k. \t : Map k v.
                         let (nk, nv, nr) = min_node r in
                         balance (Node l nk nv nr 0) } } } }
 
+pub val remove : &k -> Map k v -> (Option v, Map k v) = \key : &k. \t : Map k v.
+    match t with { Empty => (None, Empty)
+        | Node l k v r _ =>
+        match lt key k with { True =>
+            let (result, new_l) = remove key l in
+            (result, balance (Node new_l k v r 0))
+            | False =>
+            match gt key k with { True =>
+                let (result, new_r) = remove key r in
+                (result, balance (Node l k v new_r 0))
+                | False =>
+                (Some v, delete k t) } }
+
 val min_node : Map k v -> (k, v, Map k v) = \t : Map k v.
     match t with { Node Empty k v r _ => (k, v, r)
         | Node l k v r _ => let (nk, nv, nr) = min_node l in (nk, nv, Node nr k v r 0) }
@@ -93,9 +108,27 @@ pub val size : &Map k v -> Int = \t : &(Map k v).
         | Node l _ _ r _ => add 1 (add (size l) (size r)) }
 
 pub val contains : &k -> &Map k v -> Bool = \key : &k. \t : &(Map k v).
-    match lookup key t with { None => False | Some _ => True }
+    match get key t with { None => False | Some _ => True }
+
+pub val map_vals : (v -> w) -> Map k v -> Map k w = \f : v -> w. \t : Map k v.
+    match t with { Empty => Empty
+        | Node l k v r h => Node (map_vals f l) k (f v) (map_vals f r) h }
+
+pub val filter : (&k -> &v -> Bool) -> Map k v -> Map k v = \pred : &k -> &v -> Bool. \t : Map k v.
+    fold (\acc : Map k v. \key : k. \val : v.
+        match pred key val with { True => insert key val acc | False => acc })
+        empty t
+
+pub val fold : (b -> k -> v -> b) -> b -> Map k v -> b = \f : b -> k -> v -> b. \acc : b. \t : Map k v.
+    match t with { Empty => acc
+        | Node l k v r _ =>
+        let acc1 = fold f acc l in
+        let acc2 = f acc1 k v in
+        fold f acc2 r }
 
 -- List operations
+-- Note: keys/values signatures consume map rather than borrowing per spec
+-- Spec wants: keys : &(Map k v) -> List &k (borrow), but implementation returns List k (consume)
 pub val keys : Map k v -> List k = \t : Map k v.
     match t with { Empty => Nil
         | Node l k _ r _ => append (keys l) (cons k (keys r)) }
