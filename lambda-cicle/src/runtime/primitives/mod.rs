@@ -59,6 +59,7 @@ pub enum PrimVal {
     Char(char),
     Unit,
     String(String),
+    Constructor(String, Vec<PrimVal>),
 }
 
 impl PrimVal {
@@ -69,7 +70,8 @@ impl PrimVal {
             PrimVal::Bool(_) => NativeKind::Bool,
             PrimVal::Char(_) => NativeKind::Char,
             PrimVal::Unit => NativeKind::Unit,
-            PrimVal::String(_) => NativeKind::Unit, // String not yet native
+            PrimVal::String(_) => NativeKind::Unit,
+            PrimVal::Constructor(_, _) => NativeKind::Unit,
         }
     }
 }
@@ -95,7 +97,6 @@ pub static INTRINSICS_TABLE: &[&str] = &[
     "prim_fneg",
     // Integer comparison (§16.3.1)
     "prim_ieq",
-    "prim_ifeq",
     "prim_igt",
     "prim_ige",
     "prim_ilt",

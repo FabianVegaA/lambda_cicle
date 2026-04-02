@@ -173,3 +173,13 @@ impl Monad for (Result e) with
         match m with { Err e => Err e | Ok a => f a },
     then = \x : Result e a. \y : Result e b.
         match x with { Err e => Err e | Ok _ => y }
+
+-- Trait method wrappers for Int (§16.3)
+-- TODO: Replace with proper polymorphic trait method resolution
+pub val add : Int -> Int -> Int = prim_iadd
+pub val sub : Int -> Int -> Int = prim_isub  
+pub val mul : Int -> Int -> Int = prim_imul
+pub val div : Int -> Int -> Result Int DivisionByZero = prim_idiv
+pub val rem : Int -> Int -> Result Int DivisionByZero = prim_irem
+pub val neg : Int -> Int = prim_ineg
+pub val eq : Int -> Int -> Bool = prim_ieq

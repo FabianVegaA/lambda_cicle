@@ -179,6 +179,22 @@ impl Type {
     pub fn app(ty: Type, args: Vec<Type>) -> Type {
         Type::App(Box::new(ty), args)
     }
+
+    /// Check if a type contains type variables (is polymorphic)
+    pub fn is_polymorphic(&self) -> bool {
+        match self {
+            Type::Var(_) => true,
+            Type::Forall(_, _) => true,
+            Type::Arrow(_, arg, ret) => arg.is_polymorphic() || ret.is_polymorphic(),
+            Type::TraitConstraint(_, ty) => ty.is_polymorphic(),
+            Type::Inductive(_, params) => params.iter().any(|p| p.is_polymorphic()),
+            Type::Borrow(ty) => ty.is_polymorphic(),
+            Type::Product(left, right) => left.is_polymorphic() || right.is_polymorphic(),
+            Type::Sum(left, right) => left.is_polymorphic() || right.is_polymorphic(),
+            Type::App(ty, args) => ty.is_polymorphic() || args.iter().any(|a| a.is_polymorphic()),
+            Type::Native(_) => false,
+        }
+    }
 }
 
 impl fmt::Display for Type {

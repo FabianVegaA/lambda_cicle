@@ -204,6 +204,14 @@ pub fn type_check(term: &Term, ctx: &TypeContext) -> Result<(Type, TypeContext),
             Ok((constructor_info.result_type.clone(), ctx))
         }
         Term::NativeLiteral(lit) => Ok((lit.ty(), ctx.clone())),
+        Term::PrimCall { prim_name: _, args } => {
+            let mut current_ctx = ctx.clone();
+            for arg in args {
+                let (_, new_ctx) = type_check(arg, &current_ctx)?;
+                current_ctx = new_ctx;
+            }
+            Ok((Type::unit(), current_ctx))
+        }
     }
 }
 

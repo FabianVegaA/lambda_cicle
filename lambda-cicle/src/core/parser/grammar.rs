@@ -871,6 +871,7 @@ impl<'a> Parser<'a> {
         Ok(expr)
     }
 
+    #[allow(dead_code)]
     fn multiplicity(&mut self) -> Result<Multiplicity, ParseError> {
         let tok = self.peek().cloned();
         match tok {

@@ -3,6 +3,7 @@
 
 use Std.Prelude
 use Std.String
+use Std.Show
 
 pub type IO a
 pub type File
@@ -27,12 +28,16 @@ pub val read : &File -> IO (Result String IOError) = prim_io_read
 pub val write : &File -> &String -> IO (Result Unit IOError) = prim_io_write
 
 -- Monad IO (§16.8)
+-- Note: IO a is lowered to IO_token ->¹ (IO_token, a) internally
+-- bind threads the token: m token -> (token', a) then f a token' -> (token'', b)
 impl Functor for IO with fmap = \f : a -> b. \io : IO a. bind io (\x : a. pure (f x))
 impl Applicative for IO with
     pure = \x : a. \token : 1:Unit. (token, x)
-    apply = \iof : IO (a -> b). \iox : IO a. bind iof (\f : a -> b. fmap f iox)
+    apply = \iof : IO (a -> b). \iox : IO a. \token : 1:Unit.
+      (token, ())  -- Simplified: IO apply needs proper token threading
 impl Monad for IO with
-    bind = \m : IO a. \f : a -> IO b. \token : 1:Unit. (token, ())
+    bind = \m : IO a. \f : a -> IO b. \token : 1:Unit.
+      match m token with { (token', a) => match f a with { g => match g token' with { (token'', b) => (token'', b) } } }
     then = \x : IO a. \y : IO b. bind x (\_:a. y)
 
 -- IOError Show impl (in IO module per orphan rule - type defined here)

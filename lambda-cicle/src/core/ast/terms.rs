@@ -242,6 +242,10 @@ pub enum Term {
         method: MethodName,
         arg: Box<Term>,
     },
+    PrimCall {
+        prim_name: String,
+        args: Vec<Term>,
+    },
     Constructor(String, Vec<Term>),
     NativeLiteral(Literal),
 }
@@ -313,6 +317,13 @@ impl Term {
         }
     }
 
+    pub fn prim_call(prim_name: impl Into<String>, args: Vec<Term>) -> Term {
+        Term::PrimCall {
+            prim_name: prim_name.into(),
+            args,
+        }
+    }
+
     pub fn get_type(&self) -> Option<Type> {
         match self {
             Term::Var(_) => None,
@@ -338,6 +349,7 @@ impl Term {
             Term::Match { arms, .. } => arms.first().and_then(|a| a.body.get_type()),
             Term::View { arms, .. } => arms.first().and_then(|a| a.body.get_type()),
             Term::TraitMethod { .. } => None,
+            Term::PrimCall { .. } => None, // Type should be determined from primitive signature
             Term::Constructor(_, _) => None,
             Term::NativeLiteral(lit) => Some(lit.ty()),
         }
@@ -400,6 +412,17 @@ impl fmt::Display for Term {
                 arg,
             } => {
                 write!(f, "({}.{} {})", trait_name, method, arg)
+            }
+            Term::PrimCall { prim_name, args } => {
+                write!(
+                    f,
+                    "{}({})",
+                    prim_name,
+                    args.iter()
+                        .map(|a| a.to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
             }
             Term::Constructor(name, args) => {
                 write!(

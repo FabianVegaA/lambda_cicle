@@ -67,6 +67,71 @@ pub fn inject_prelude(decls: &mut Vec<Decl>) -> Result<(), ModuleError> {
     Ok(())
 }
 
+/// Elaborate a list of declarations into a single executable term.
+///
+/// This converts ValDecl declarations into nested Let bindings, allowing all
+/// declarations to be in scope for the final expression. If no explicit main
+/// expression is provided, returns the last ValDecl's term.
+pub fn elaborate_declarations(decls: &[Decl]) -> Result<Term, ModuleError> {
+    use crate::core::ast::Multiplicity;
+
+    // Collect all val declarations
+    let val_decls: Vec<_> = decls
+        .iter()
+        .filter_map(|d| {
+            if let Decl::ValDecl { name, ty, term, .. } = d {
+                Some((name.clone(), ty.clone(), (**term).clone()))
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    if val_decls.is_empty() {
+        return Err(ModuleError {
+            message: "No value declarations found in module".to_string(),
+        });
+    }
+
+    // Look for a 'main' declaration
+    if let Some((_, _, main_term)) = val_decls.iter().find(|(name, _, _)| name == "main") {
+        // Build nested Let terms for all other declarations, with main as the body
+        let mut result = main_term.clone();
+
+        for (name, ty, term) in val_decls.iter().rev() {
+            if name != "main" {
+                result = Term::Let {
+                    var: name.clone(),
+                    multiplicity: Multiplicity::Omega,
+                    annot: ty.clone(),
+                    value: Box::new(term.clone()),
+                    body: Box::new(result),
+                };
+            }
+        }
+
+        return Ok(result);
+    }
+
+    // No main found - use the last val declaration as the result
+    // and bind all previous declarations
+    let (_, _, last_term) = val_decls.last().unwrap();
+    let mut result = last_term.clone();
+
+    // Build nested Let terms for all declarations except the last
+    for (name, ty, term) in val_decls.iter().rev().skip(1) {
+        result = Term::Let {
+            var: name.clone(),
+            multiplicity: Multiplicity::Omega,
+            annot: ty.clone(),
+            value: Box::new(term.clone()),
+            body: Box::new(result),
+        };
+    }
+
+    Ok(result)
+}
+
 pub fn parse_module_file(path: &Path) -> Result<Term, ModuleError> {
     let source = std::fs::read_to_string(path).map_err(|e| ModuleError {
         message: format!("Failed to read file: {}", e),

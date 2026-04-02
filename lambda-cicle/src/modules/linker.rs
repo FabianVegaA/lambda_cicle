@@ -1,6 +1,5 @@
 use super::{deserialize_module, serialize_module, Module, ModuleError};
 use crate::runtime::evaluator::verify_s5_prime;
-use crate::traits::{check_coherence, Registry};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
@@ -95,7 +94,7 @@ fn check_global_coherence(registry: &GlobalRegistry) -> Result<(), ModuleError> 
     if registry.impls.len() > 1 {
         let mut seen: std::collections::HashSet<(String, String)> =
             std::collections::HashSet::new();
-        for ((trait_name, ty), (impl_block, module)) in &registry.impls {
+        for ((trait_name, ty), (_impl_block, _module)) in &registry.impls {
             let key = (trait_name.clone(), ty.clone());
             if seen.contains(&key) {
                 return Err(ModuleError {

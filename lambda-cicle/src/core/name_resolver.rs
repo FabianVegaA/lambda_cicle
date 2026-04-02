@@ -1,5 +1,5 @@
 use crate::core::ast::{Decl, UseMode, Visibility};
-use crate::modules::{Exports, ModuleError};
+use crate::modules::Exports;
 use std::collections::{HashMap, HashSet, VecDeque};
 
 #[derive(Debug, Clone)]

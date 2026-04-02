@@ -1,5 +1,6 @@
 pub mod ast;
 pub mod borrow;
+pub mod desugar;
 pub mod exhaustiveness;
 pub mod multiplicity;
 pub mod name_resolver;

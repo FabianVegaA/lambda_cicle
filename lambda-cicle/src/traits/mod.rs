@@ -3,7 +3,7 @@ pub mod registry;
 pub mod resolution;
 
 pub use coherence::{check_coherence, check_orphan_rule, DefiningModules};
-pub use registry::{Implementation, Registry};
+pub use registry::{build_registry_from_decls, Implementation, Registry, TraitMethodImpl};
 pub use resolution::resolve_method;
 
 use crate::core::ast::{MethodName, TraitName, Type};

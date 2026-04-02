@@ -5,14 +5,20 @@ pub mod tools;
 pub mod traits;
 
 pub use core::ast::{Decl, Pattern, Term, Type, Visibility};
+pub use core::desugar::desugar_term;
 pub use core::name_resolver::{self, NameResolutionError};
 pub use core::parser::{parse, parse_program, ParseError};
 pub use core::typecheck::{type_check_with_borrow_check, TypeError};
-pub use modules::{link, load_module, Exports, Module, ModuleError};
+pub use modules::{
+    elaborate_declarations, inject_prelude, link, load_module, Exports, Module, ModuleError,
+};
 pub use runtime::evaluator::{Evaluator, ParallelEvaluator, SequentialEvaluator};
 pub use runtime::translate;
 pub use tools::bench::run_benchmark;
-pub use traits::{check_coherence, resolve_method, Implementation, Registry, TraitError};
+pub use traits::{
+    build_registry_from_decls, check_coherence, resolve_method, Implementation, Registry,
+    TraitError, TraitMethodImpl,
+};
 
 #[derive(Debug)]
 pub enum PipelineError {

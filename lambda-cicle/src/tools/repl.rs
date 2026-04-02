@@ -1,16 +1,30 @@
 use crate::core::parser::ParseError;
 use crate::core::typecheck::TypeError;
 use crate::runtime::evaluator::{Evaluator, SequentialEvaluator};
-use crate::{parse, translate, type_check_with_borrow_check};
+use crate::{
+    build_registry_from_decls, desugar_term, elaborate_declarations, inject_prelude, parse,
+    parse_program, translate, type_check_with_borrow_check,
+};
 
 pub struct Repl {
     history: Vec<String>,
+    prelude_decls: Vec<crate::core::ast::Decl>,
+    registry: crate::traits::registry::Registry,
 }
 
 impl Repl {
     pub fn new() -> Self {
+        let prelude_source = include_str!("../../stdlib/Prelude.λ");
+        let mut prelude_decls = parse_program(prelude_source).unwrap_or_default();
+        if let Err(e) = inject_prelude(&mut prelude_decls) {
+            eprintln!("Warning: Could not inject prelude: {}", e);
+        }
+        let registry = build_registry_from_decls(&prelude_decls);
+
         Repl {
             history: Vec::new(),
+            prelude_decls,
+            registry,
         }
     }
 
@@ -93,8 +107,24 @@ Examples:
     }
 
     fn eval_expr(&self, expr: &str) -> Result<Option<String>, ReplError> {
-        let term = parse(expr).map_err(ReplError::Parse)?;
-        let ty = type_check_with_borrow_check(&term).map_err(ReplError::Type)?;
+        let decls_result = parse_program(expr);
+
+        let (term, ty) = if let Ok(decls) = decls_result {
+            let registry = build_registry_from_decls(&self.prelude_decls);
+
+            let elaborated = elaborate_declarations(&decls)
+                .map_err(|e| ReplError::Parse(ParseError::SyntaxError(e.to_string())))?;
+
+            let desugared = desugar_term(&elaborated, &registry);
+            let ty = type_check_with_borrow_check(&desugared).map_err(ReplError::Type)?;
+
+            (desugared, ty)
+        } else {
+            let term = parse(expr).map_err(ReplError::Parse)?;
+            let desugared = desugar_term(&term, &self.registry);
+            let ty = type_check_with_borrow_check(&desugared).map_err(ReplError::Type)?;
+            (desugared, ty)
+        };
 
         let mut net = translate(&term);
         let evaluator = SequentialEvaluator::new();

@@ -542,7 +542,7 @@ impl Net {
             break;
         }
 
-        let (io_id, op, values, value_nodes, token_node, token_port) = io_op_to_execute?;
+        let (io_id, op, values, value_nodes, _token_node, _token_port) = io_op_to_execute?;
 
         // Execute the IO operation (outside the borrow scope)
         let result = self.execute_io_op(&op, &values)?;

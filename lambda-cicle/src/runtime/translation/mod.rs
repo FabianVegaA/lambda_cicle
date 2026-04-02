@@ -1,7 +1,7 @@
 use crate::core::ast::types::Multiplicity;
 use crate::core::ast::{Arm, Literal, Pattern, Term};
-use crate::runtime::net::{Agent, Net, Node, NodeId, Port, PortIndex, Wire};
-use crate::runtime::primitives::{prim_name_to_io_op, PrimOp, PrimVal};
+use crate::runtime::net::{Net, Node, NodeId, Port, PortIndex, Wire};
+use crate::runtime::primitives::{prim_name_to_io_op, prim_name_to_op, PrimVal};
 
 pub struct NetBuilder {
     net: Net,
@@ -48,6 +48,7 @@ impl NetBuilder {
                 method: _,
                 arg,
             } => self.translate_term(arg),
+            Term::PrimCall { prim_name, args } => self.translate_prim_call(prim_name, args),
         }
     }
 
@@ -68,7 +69,22 @@ impl NetBuilder {
             return id;
         }
 
+        // Check if this is a prim_* intrinsic
+        if let Some(op) = prim_name_to_op(name) {
+            eprintln!("DEBUG translate_var: {} is a prim op {:?}", name, op);
+            let node = Node::prim(op.clone());
+            let id = self.net.add_node(node);
+            // Port 0: principal
+            self.net.add_free_port(id, PortIndex(0));
+            let arity = op.arity();
+            for i in 0..arity {
+                self.net.add_free_port(id, PortIndex(i + 1));
+            }
+            return id;
+        }
+
         let node = Node::constructor(name.to_string(), 2);
+        eprintln!("DEBUG translate_var: {} is a constructor", name);
         let id = self.net.add_node(node);
         self.net.add_free_port(id, PortIndex(0));
         self.net.add_free_port(id, PortIndex(1));
@@ -107,6 +123,11 @@ impl NetBuilder {
     }
 
     fn translate_app(&mut self, fun: &Term, arg: &Term) -> NodeId {
+        // Check if we're applying to a primitive - if so, collect all args and use PrimCall
+        if let Some((prim_name, collected_args)) = Self::detect_prim_application(fun, arg) {
+            return self.translate_prim_call(&prim_name, &collected_args);
+        }
+
         let fun_id = self.translate_term(fun);
         let arg_id = self.translate_term(arg);
 
@@ -117,6 +138,37 @@ impl NetBuilder {
         self.connect_ports(arg_id, 0, app_id, 1);
 
         app_id
+    }
+
+    /// Detect if this is a curried application of a primitive.
+    /// Returns (prim_name, all_args) if it matches the pattern:
+    ///   (... ((Var("prim_*") arg1) arg2) ... argN)
+    fn detect_prim_application(fun: &Term, arg: &Term) -> Option<(String, Vec<Term>)> {
+        // Collect the application chain
+        let mut args = vec![arg.clone()];
+        let mut current = fun;
+
+        loop {
+            match current {
+                Term::Var(name) if name.starts_with("prim_") => {
+                    // Found the primitive at the base!
+                    args.reverse(); // We collected in reverse order
+                    return Some((name.clone(), args));
+                }
+                Term::App {
+                    fun: inner_fun,
+                    arg: inner_arg,
+                } => {
+                    // Continue unwrapping
+                    args.push((**inner_arg).clone());
+                    current = inner_fun;
+                }
+                _ => {
+                    // Not a primitive application
+                    return None;
+                }
+            }
+        }
     }
 
     fn translate_match(&mut self, scrutinee: &Term, arms: &[Arm]) -> NodeId {
@@ -237,6 +289,39 @@ impl NetBuilder {
                 id
             }
         }
+    }
+
+    fn translate_prim_call(&mut self, prim_name: &str, args: &[Term]) -> NodeId {
+        // Look up the primitive operation
+        let op = prim_name_to_op(prim_name).expect(&format!("Unknown primitive: {}", prim_name));
+
+        eprintln!(
+            "DEBUG translate_prim_call: {} with {} args",
+            prim_name,
+            args.len()
+        );
+
+        // Create the primitive node
+        let prim_node = Node::prim(op.clone());
+        let prim_id = self.net.add_node(prim_node);
+
+        // Port 0 is the principal port (output)
+        self.net.add_free_port(prim_id, PortIndex(0));
+
+        // Translate each argument and wire it to the corresponding port
+        for (i, arg) in args.iter().enumerate() {
+            let arg_id = self.translate_term(arg);
+            // Connect arg's principal port (0) to prim's input port (i+1)
+            self.connect_ports(arg_id, 0, prim_id, i + 1);
+        }
+
+        eprintln!(
+            "DEBUG translate_prim_call: created prim node {:?} with {} wired args",
+            prim_id,
+            args.len()
+        );
+
+        prim_id
     }
 
     fn connect_ports(

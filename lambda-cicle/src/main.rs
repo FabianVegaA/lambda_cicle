@@ -1,9 +1,14 @@
 use clap::{Parser, Subcommand};
 use lambda_cicle::core::ast::Decl;
-use lambda_cicle::modules::{inject_prelude as lc_inject_prelude, Exports, Module};
+use lambda_cicle::modules::{
+    elaborate_declarations, inject_prelude as lc_inject_prelude, Exports, Module,
+};
 use lambda_cicle::runtime::evaluator::{Evaluator, SequentialEvaluator};
 use lambda_cicle::tools::{net_to_dot, run_benchmark, run_repl, TraceDebugger};
-use lambda_cicle::{parse, parse_program, translate, type_check_with_borrow_check, Term};
+use lambda_cicle::{
+    build_registry_from_decls, desugar_term, parse, parse_program, translate,
+    type_check_with_borrow_check, Term,
+};
 use std::path::PathBuf;
 
 #[derive(Parser)]
@@ -112,24 +117,27 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     eprintln!("Warning: Could not load prelude: {}", e);
                 }
 
-                // Find the main entry point
-                let main_decl = decls.iter().find_map(|d| {
-                    if let Decl::ValDecl {
-                        name,
-                        term: main_term,
-                        ..
-                    } = d
-                    {
-                        if name == "main" {
-                            return Some((**main_term).clone());
-                        }
-                    }
-                    None
-                });
+                // Build the trait registry from declarations (includes prelude)
+                let registry = build_registry_from_decls(&decls);
 
-                term = main_decl
-                    .unwrap_or_else(|| Term::NativeLiteral(lambda_cicle::core::ast::Literal::Unit));
-                _ty = type_check_with_borrow_check(&term)?;
+                // Elaborate all declarations into a single executable term
+                match elaborate_declarations(&decls) {
+                    Ok(elaborated_term) => {
+                        // Desugar trait method calls to primitive calls first
+                        let desugared_term = desugar_term(&elaborated_term, &registry);
+                        // Then type check the desugared term
+                        let ty = type_check_with_borrow_check(&desugared_term)?;
+                        term = desugared_term;
+                        _ty = ty;
+                    }
+                    Err(e) => {
+                        eprintln!("Warning: Could not elaborate declarations: {}", e);
+                        eprintln!("Falling back to expression parsing...");
+                        // Fall back to parsing as expression
+                        term = parse(&source)?;
+                        _ty = type_check_with_borrow_check(&term)?;
+                    }
+                }
             } else {
                 // Fall back to parsing as expression
                 term = parse(&source)?;

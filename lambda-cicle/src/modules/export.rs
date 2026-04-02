@@ -205,8 +205,27 @@ impl Exports {
                         exports.add_trait(name.clone(), trait_type, visibility.clone());
                     }
                 }
-                Decl::ImplDecl { .. } => {
-                    // impl blocks are never exported explicitly (§8.5)
+                Decl::ImplDecl {
+                    ty,
+                    trait_name,
+                    methods,
+                    ..
+                } => {
+                    // Export trait method implementations as values (§8.5)
+                    // This allows direct calls like "add 3 5" instead of requiring
+                    // explicit trait resolution syntax
+                    for method in methods {
+                        // Only export if the implementation type is concrete (not polymorphic)
+                        if !ty.is_polymorphic() {
+                            // Export as: <method_name> : <method_type>
+                            // e.g., "add" for Int becomes: add : Int -> Int -> Int = prim_iadd
+                            exports.add_value(
+                                method.name.to_string(),
+                                method.ty.clone(),
+                                Visibility::Public,
+                            );
+                        }
+                    }
                 }
                 Decl::UseDecl { .. } => {
                     // use declarations are not exports

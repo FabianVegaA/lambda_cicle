@@ -75,7 +75,7 @@ fn extract_result(net: &Net) -> Option<Term> {
         return Some(Term::NativeLiteral(Literal::Unit));
     }
 
-    for (node_id, node) in net.nodes().iter().enumerate() {
+    for (_node_id, node) in net.nodes().iter().enumerate() {
         match &node.agent {
             Agent::PrimVal(PrimVal::Int(n)) => {
                 return Some(Term::NativeLiteral(Literal::Int(*n)));
@@ -91,6 +91,13 @@ fn extract_result(net: &Net) -> Option<Term> {
             }
             Agent::PrimVal(PrimVal::Unit) => {
                 return Some(Term::NativeLiteral(Literal::Unit));
+            }
+            Agent::PrimVal(PrimVal::Constructor(name, args)) => {
+                let term_args: Vec<Term> = args
+                    .iter()
+                    .filter_map(|arg| prim_val_to_term(arg))
+                    .collect();
+                return Some(Term::Constructor(name.clone(), term_args));
             }
             Agent::Constructor(name) => {
                 if let Ok(n) = name.parse::<i64>() {
@@ -108,4 +115,19 @@ fn extract_result(net: &Net) -> Option<Term> {
     }
 
     None
+}
+
+fn prim_val_to_term(val: &PrimVal) -> Option<Term> {
+    match val {
+        PrimVal::Int(n) => Some(Term::NativeLiteral(Literal::Int(*n))),
+        PrimVal::Float(f) => Some(Term::NativeLiteral(Literal::Float(*f))),
+        PrimVal::Bool(b) => Some(Term::NativeLiteral(Literal::Bool(*b))),
+        PrimVal::Char(c) => Some(Term::NativeLiteral(Literal::Char(*c))),
+        PrimVal::Unit => Some(Term::NativeLiteral(Literal::Unit)),
+        PrimVal::String(s) => Some(Term::NativeLiteral(Literal::Str(s.clone()))),
+        PrimVal::Constructor(name, args) => {
+            let term_args: Vec<Term> = args.iter().filter_map(prim_val_to_term).collect();
+            Some(Term::Constructor(name.clone(), term_args))
+        }
+    }
 }

@@ -1,16 +1,61 @@
+use lambda_cicle::core::typecheck::context::ConstructorInfo;
 use lambda_cicle::modules::loader::inject_prelude;
 use lambda_cicle::{
-    parse_program, translate, type_check_with_borrow_check, Evaluator, SequentialEvaluator, Term,
+    build_registry_from_decls, desugar_trait_methods, parse_program, translate, type_check,
+    BorrowChecker, Decl, Evaluator, Multiplicity, SequentialEvaluator, Term, TypeContext,
 };
 
 fn eval_expr(source: &str) -> Result<Term, String> {
-    // Parse as program (declarations)
     let mut decls = parse_program(source).map_err(|e| format!("Parse error: {:?}", e))?;
 
-    // Inject prelude
     inject_prelude(&mut decls).map_err(|e| format!("Prelude injection error: {:?}", e))?;
 
-    // Find main expression
+    let mut ctx = TypeContext::new();
+
+    for decl in &decls {
+        if let Decl::TypeDecl {
+            name: type_name,
+            constructors,
+            ..
+        } = decl
+        {
+            for constructor in constructors {
+                let info = ConstructorInfo {
+                    type_name: type_name.clone(),
+                    field_types: constructor.args.clone(),
+                    result_type: lambda_cicle::Type::inductive(type_name.clone(), vec![]),
+                };
+                ctx = ctx.register_constructor(constructor.name.clone(), info);
+
+                let constructor_type = if constructor.args.is_empty() {
+                    lambda_cicle::Type::inductive(type_name.clone(), vec![])
+                } else {
+                    let result_type = lambda_cicle::Type::inductive(type_name.clone(), vec![]);
+                    constructor
+                        .args
+                        .iter()
+                        .rev()
+                        .fold(result_type, |acc, arg_ty| {
+                            lambda_cicle::Type::arrow(arg_ty.clone(), Multiplicity::Omega, acc)
+                        })
+                };
+                ctx = ctx.extend(
+                    constructor.name.clone(),
+                    Multiplicity::Omega,
+                    constructor_type,
+                );
+            }
+        }
+    }
+
+    for decl in &decls {
+        if let Decl::ValDecl { name, ty, .. } = decl {
+            ctx = ctx.extend(name.clone(), Multiplicity::Omega, ty.clone());
+        }
+    }
+
+    let registry = build_registry_from_decls(&decls);
+
     let term = decls
         .iter()
         .find_map(|d| {
@@ -23,11 +68,17 @@ fn eval_expr(source: &str) -> Result<Term, String> {
         })
         .ok_or_else(|| "No main expression found".to_string())?;
 
-    // Type check
-    let _ty = type_check_with_borrow_check(&term).map_err(|e| format!("Type error: {:?}", e))?;
+    let (_ty, _) =
+        type_check(&term, &ctx, &registry).map_err(|e| format!("Type error: {:?}", e))?;
 
-    // Translate and evaluate
-    let mut net = translate(&term);
+    let desugared_term = desugar_trait_methods(&term, &registry);
+
+    let mut borrow_checker = BorrowChecker::new();
+    borrow_checker
+        .check(&desugared_term)
+        .map_err(|e| format!("Borrow check error: {:?}", e))?;
+
+    let mut net = translate(&desugared_term);
     let evaluator = SequentialEvaluator::new();
     evaluator
         .evaluate(&mut net)
@@ -384,4 +435,26 @@ mod char_operations {
             _ => panic!("Expected GT, got {:?}", result),
         }
     }
+}
+
+#[test]
+fn test_prim_call_translation() {
+    use lambda_cicle::{Term, translate};
+    use lambda_cicle::core::ast::Literal;
+    use lambda_cicle::runtime::evaluator::{Evaluator, SequentialEvaluator};
+    
+    // Create: prim_iadd(3, 5)
+    let term = Term::PrimCall {
+        prim_name: "prim_iadd".to_string(),
+        args: vec![
+            Term::NativeLiteral(Literal::Int(3)),
+            Term::NativeLiteral(Literal::Int(5)),
+        ],
+    };
+    
+    let mut net = translate(&term);
+    let evaluator = SequentialEvaluator::new();
+    let result = evaluator.evaluate(&mut net).unwrap();
+    
+    assert_eq!(result, Some(Term::NativeLiteral(Literal::Int(8))));
 }

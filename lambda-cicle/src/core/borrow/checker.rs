@@ -88,6 +88,12 @@ impl BorrowChecker {
                 method: _,
                 arg,
             } => self.check_term(arg),
+            Term::PrimCall { prim_name: _, args } => {
+                for arg in args {
+                    self.check_term(arg)?;
+                }
+                Ok(())
+            }
             Term::Constructor(_, args) => {
                 for arg in args {
                     self.check_term(arg)?;
@@ -153,6 +159,12 @@ impl BorrowChecker {
                 Ok(())
             }
             Term::TraitMethod { arg, .. } => self.check_borrow_escape(arg),
+            Term::PrimCall { args, .. } => {
+                for arg in args {
+                    self.check_borrow_escape(arg)?;
+                }
+                Ok(())
+            }
             Term::Constructor(_, args) => {
                 for arg in args {
                     self.check_borrow_escape(arg)?;

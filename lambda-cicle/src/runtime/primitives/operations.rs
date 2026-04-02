@@ -1,5 +1,4 @@
-use crate::core::ast::Literal;
-use crate::runtime::primitives::{IOOp, NativeKind, PrimVal};
+use crate::runtime::primitives::{IOOp, PrimVal};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum PrimOp {
@@ -146,7 +145,10 @@ impl PrimOp {
                 let b = args.get(1)?;
                 if let (PrimVal::Int(x), PrimVal::Int(y)) = (a, b) {
                     if *y == 0 {
-                        return None;
+                        return Some(PrimVal::Constructor(
+                            "Err".to_string(),
+                            vec![PrimVal::Constructor("DivisionByZero".to_string(), vec![])],
+                        ));
                     }
                     return Some(PrimVal::Int(x / y));
                 }
@@ -157,7 +159,10 @@ impl PrimOp {
                 let b = args.get(1)?;
                 if let (PrimVal::Int(x), PrimVal::Int(y)) = (a, b) {
                     if *y == 0 {
-                        return None;
+                        return Some(PrimVal::Constructor(
+                            "Err".to_string(),
+                            vec![PrimVal::Constructor("DivisionByZero".to_string(), vec![])],
+                        ));
                     }
                     return Some(PrimVal::Int(x % y));
                 }
@@ -247,7 +252,10 @@ impl PrimOp {
                 let b = args.get(1)?;
                 if let (PrimVal::Float(x), PrimVal::Float(y)) = (a, b) {
                     if *y == 0.0 {
-                        return None;
+                        return Some(PrimVal::Constructor(
+                            "Err".to_string(),
+                            vec![PrimVal::Constructor("DivisionByZero".to_string(), vec![])],
+                        ));
                     }
                     return Some(PrimVal::Float(x / y));
                 }
@@ -332,7 +340,10 @@ impl PrimOp {
                 let b = args.get(1)?;
                 if let (PrimVal::Float(x), PrimVal::Float(y)) = (a, b) {
                     if *y == 0.0 {
-                        return None;
+                        return Some(PrimVal::Constructor(
+                            "Err".to_string(),
+                            vec![PrimVal::Constructor("DivisionByZero".to_string(), vec![])],
+                        ));
                     }
                     return Some(PrimVal::Float(x % y));
                 }
