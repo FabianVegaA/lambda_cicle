@@ -315,28 +315,36 @@ fn get_type_of_term_with_registry(term: &Term, registry: &Registry) -> Option<Ty
 fn prim_name_to_type(prim_name: &str) -> Option<Type> {
     use crate::core::ast::types::Multiplicity;
 
+    let division_by_zero = Type::inductive("DivisionByZero".to_string(), vec![]);
+    let result_int_dbz = Type::inductive(
+        "Result".to_string(),
+        vec![Type::int(), division_by_zero.clone()],
+    );
+
     match prim_name {
-        "prim_iadd" | "prim_isub" | "prim_imul" | "prim_irem" => Some(Type::arrow(
+        "prim_iadd" | "prim_isub" | "prim_imul" => Some(Type::arrow(
             Type::int(),
             Multiplicity::One,
             Type::arrow(Type::int(), Multiplicity::One, Type::int()),
         )),
-        "prim_idiv" => {
-            let division_by_zero = Type::inductive("DivisionByZero".to_string(), vec![]);
-            Some(Type::arrow(
-                Type::int(),
-                Multiplicity::One,
-                Type::arrow(
-                    Type::int(),
-                    Multiplicity::One,
-                    Type::inductive("Result".to_string(), vec![Type::int(), division_by_zero]),
-                ),
-            ))
-        }
-        "prim_fadd" | "prim_fsub" | "prim_fmul" | "prim_fdiv" | "prim_frem" => Some(Type::arrow(
+        "prim_idiv" | "prim_irem" => Some(Type::arrow(
+            Type::int(),
+            Multiplicity::One,
+            Type::arrow(Type::int(), Multiplicity::One, result_int_dbz),
+        )),
+        "prim_fadd" | "prim_fsub" | "prim_fmul" => Some(Type::arrow(
             Type::float(),
             Multiplicity::One,
             Type::arrow(Type::float(), Multiplicity::One, Type::float()),
+        )),
+        "prim_fdiv" | "prim_frem" => Some(Type::arrow(
+            Type::float(),
+            Multiplicity::One,
+            Type::arrow(
+                Type::float(),
+                Multiplicity::One,
+                Type::inductive("Result".to_string(), vec![Type::float(), division_by_zero]),
+            ),
         )),
         "prim_ieq" | "prim_igt" | "prim_ilt" | "prim_ige" | "prim_ile" => Some(Type::arrow(
             Type::int(),
