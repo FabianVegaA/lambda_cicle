@@ -216,13 +216,13 @@ impl fmt::Display for Type {
                 } else {
                     write!(
                         f,
-                        "{}<{}>",
+                        "{} {}",
                         name,
                         params
                             .iter()
                             .map(|p| p.to_string())
                             .collect::<Vec<_>>()
-                            .join(", ")
+                            .join(" ")
                     )
                 }
             }
