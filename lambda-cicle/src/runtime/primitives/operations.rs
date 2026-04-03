@@ -150,7 +150,10 @@ impl PrimOp {
                             vec![PrimVal::Constructor("DivisionByZero".to_string(), vec![])],
                         ));
                     }
-                    return Some(PrimVal::Int(x / y));
+                    return Some(PrimVal::Constructor(
+                        "Ok".to_string(),
+                        vec![PrimVal::Int(x / y)],
+                    ));
                 }
                 None
             }
@@ -164,7 +167,10 @@ impl PrimOp {
                             vec![PrimVal::Constructor("DivisionByZero".to_string(), vec![])],
                         ));
                     }
-                    return Some(PrimVal::Int(x % y));
+                    return Some(PrimVal::Constructor(
+                        "Ok".to_string(),
+                        vec![PrimVal::Int(x % y)],
+                    ));
                 }
                 None
             }
@@ -257,7 +263,10 @@ impl PrimOp {
                             vec![PrimVal::Constructor("DivisionByZero".to_string(), vec![])],
                         ));
                     }
-                    return Some(PrimVal::Float(x / y));
+                    return Some(PrimVal::Constructor(
+                        "Ok".to_string(),
+                        vec![PrimVal::Float(x / y)],
+                    ));
                 }
                 None
             }
@@ -345,7 +354,10 @@ impl PrimOp {
                             vec![PrimVal::Constructor("DivisionByZero".to_string(), vec![])],
                         ));
                     }
-                    return Some(PrimVal::Float(x % y));
+                    return Some(PrimVal::Constructor(
+                        "Ok".to_string(),
+                        vec![PrimVal::Float(x % y)],
+                    ));
                 }
                 None
             }
