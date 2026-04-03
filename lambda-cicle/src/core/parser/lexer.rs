@@ -1,52 +1,112 @@
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub enum Token {
-    KwLet,
-    KwIn,
-    KwMatch,
-    KwView,
-    KwWith,
-    KwTrue,
-    KwFalse,
-    KwForall,
-    KwUnit,
-    KwLambda,
-    KwPub,
-    KwUse,
-    KwType,
-    KwTrait,
-    KwImpl,
-    KwNoPrelude,
-    KwWhere,
-    KwVal,
-    KwAs,
-    TyInt,
-    TyFloat,
-    TyChar,
-    MultiplicityZero,
-    MultiplicityOne,
-    MultiplicityOmega,
-    MultiplicityBorrow,
-    LParen,
-    RParen,
-    LBrace,
-    RBrace,
-    Colon,
-    Comma,
-    Dot,
-    DotDot,
-    Equals,
-    Arrow,
-    FatArrow,
-    Pipe,
-    Underscore,
-    IntLit(i64),
-    FloatLit(f64),
-    BoolLit(bool),
-    CharLit(char),
-    StringLit(String),
-    UnitLit,
-    Ident(String),
-    EOF,
+    KwLet(usize, usize),
+    KwIn(usize, usize),
+    KwMatch(usize, usize),
+    KwView(usize, usize),
+    KwWith(usize, usize),
+    KwTrue(usize, usize),
+    KwFalse(usize, usize),
+    KwForall(usize, usize),
+    KwUnit(usize, usize),
+    KwLambda(usize, usize),
+    KwPub(usize, usize),
+    KwUse(usize, usize),
+    KwType(usize, usize),
+    KwTrait(usize, usize),
+    KwImpl(usize, usize),
+    KwNoPrelude(usize, usize),
+    KwWhere(usize, usize),
+    KwVal(usize, usize),
+    KwAs(usize, usize),
+    TyInt(usize, usize),
+    TyFloat(usize, usize),
+    TyChar(usize, usize),
+    MultiplicityZero(usize, usize),
+    MultiplicityOne(usize, usize),
+    MultiplicityOmega(usize, usize),
+    MultiplicityBorrow(usize, usize),
+    LParen(usize, usize),
+    RParen(usize, usize),
+    LBrace(usize, usize),
+    RBrace(usize, usize),
+    Colon(usize, usize),
+    Comma(usize, usize),
+    Dot(usize, usize),
+    DotDot(usize, usize),
+    Equals(usize, usize),
+    Arrow(usize, usize),
+    FatArrow(usize, usize),
+    Pipe(usize, usize),
+    Underscore(usize, usize),
+    IntLit(i64, usize, usize),
+    FloatLit(f64, usize, usize),
+    BoolLit(bool, usize, usize),
+    CharLit(char, usize, usize),
+    StringLit(String, usize, usize),
+    UnitLit(usize, usize),
+    Ident(String, usize, usize),
+    EOF(usize, usize),
+}
+
+impl Token {
+    pub fn position(&self) -> Option<(usize, usize)> {
+        match self {
+            Token::KwLet(l, c)
+            | Token::KwIn(l, c)
+            | Token::KwMatch(l, c)
+            | Token::KwView(l, c)
+            | Token::KwWith(l, c)
+            | Token::KwTrue(l, c)
+            | Token::KwFalse(l, c)
+            | Token::KwForall(l, c)
+            | Token::KwUnit(l, c)
+            | Token::KwLambda(l, c)
+            | Token::KwPub(l, c)
+            | Token::KwUse(l, c)
+            | Token::KwType(l, c)
+            | Token::KwTrait(l, c)
+            | Token::KwImpl(l, c)
+            | Token::KwNoPrelude(l, c)
+            | Token::KwWhere(l, c)
+            | Token::KwVal(l, c)
+            | Token::KwAs(l, c)
+            | Token::TyInt(l, c)
+            | Token::TyFloat(l, c)
+            | Token::TyChar(l, c)
+            | Token::MultiplicityZero(l, c)
+            | Token::MultiplicityOne(l, c)
+            | Token::MultiplicityOmega(l, c)
+            | Token::MultiplicityBorrow(l, c)
+            | Token::LParen(l, c)
+            | Token::RParen(l, c)
+            | Token::LBrace(l, c)
+            | Token::RBrace(l, c)
+            | Token::Colon(l, c)
+            | Token::Comma(l, c)
+            | Token::Dot(l, c)
+            | Token::DotDot(l, c)
+            | Token::Equals(l, c)
+            | Token::Arrow(l, c)
+            | Token::FatArrow(l, c)
+            | Token::Pipe(l, c)
+            | Token::Underscore(l, c)
+            | Token::UnitLit(l, c)
+            | Token::EOF(l, c) => Some((*l, *c)),
+            Token::IntLit(_, l, c)
+            | Token::FloatLit(_, l, c)
+            | Token::BoolLit(_, l, c)
+            | Token::CharLit(_, l, c)
+            | Token::StringLit(_, l, c)
+            | Token::Ident(_, l, c) => Some((*l, *c)),
+        }
+    }
+}
+
+impl PartialEq for Token {
+    fn eq(&self, other: &Self) -> bool {
+        std::mem::discriminant(self) == std::mem::discriminant(other)
+    }
 }
 
 pub struct Lexer {
@@ -76,48 +136,48 @@ impl Lexer {
             match self.peek() {
                 Some('(') => {
                     self.advance();
-                    tokens.push(Token::LParen);
+                    tokens.push(Token::LParen(self.line, self.col));
                 }
                 Some(')') => {
                     self.advance();
-                    tokens.push(Token::RParen);
+                    tokens.push(Token::RParen(self.line, self.col));
                 }
                 Some('{') => {
                     self.advance();
-                    tokens.push(Token::LBrace);
+                    tokens.push(Token::LBrace(self.line, self.col));
                 }
                 Some('}') => {
                     self.advance();
-                    tokens.push(Token::RBrace);
+                    tokens.push(Token::RBrace(self.line, self.col));
                 }
                 Some(':') => {
                     self.advance();
-                    tokens.push(Token::Colon);
+                    tokens.push(Token::Colon(self.line, self.col));
                 }
                 Some(',') => {
                     self.advance();
-                    tokens.push(Token::Comma);
+                    tokens.push(Token::Comma(self.line, self.col));
                 }
                 Some('.') => {
                     self.advance();
                     if let Some('.') = self.peek() {
                         self.advance();
-                        tokens.push(Token::DotDot);
+                        tokens.push(Token::DotDot(self.line, self.col));
                     } else {
-                        tokens.push(Token::Dot);
+                        tokens.push(Token::Dot(self.line, self.col));
                     }
                 }
                 Some('|') => {
                     self.advance();
-                    tokens.push(Token::Pipe);
+                    tokens.push(Token::Pipe(self.line, self.col));
                 }
                 Some('=') => {
                     self.advance();
                     if self.peek() == Some('>') {
                         self.advance();
-                        tokens.push(Token::FatArrow);
+                        tokens.push(Token::FatArrow(self.line, self.col));
                     } else {
-                        tokens.push(Token::Equals);
+                        tokens.push(Token::Equals(self.line, self.col));
                     }
                 }
                 Some('_') => {
@@ -128,17 +188,17 @@ impl Lexer {
                             let ident = format!("_{}", ident);
                             tokens.push(self.keyword_or_ident(&ident));
                         } else {
-                            tokens.push(Token::Underscore);
+                            tokens.push(Token::Underscore(self.line, self.col));
                         }
                     } else {
-                        tokens.push(Token::Underscore);
+                        tokens.push(Token::Underscore(self.line, self.col));
                     }
                 }
                 Some('-') => {
                     self.advance();
                     if self.peek() == Some('>') {
                         self.advance();
-                        tokens.push(Token::Arrow);
+                        tokens.push(Token::Arrow(self.line, self.col));
                     } else {
                         return Err(LexError::UnexpectedChar('-', self.line, self.col));
                     }
@@ -150,11 +210,11 @@ impl Lexer {
                 }
                 Some('ω') => {
                     self.advance();
-                    tokens.push(Token::MultiplicityOmega);
+                    tokens.push(Token::MultiplicityOmega(self.line, self.col));
                 }
                 Some('&') => {
                     self.advance();
-                    tokens.push(Token::MultiplicityBorrow);
+                    tokens.push(Token::MultiplicityBorrow(self.line, self.col));
                 }
                 Some('0'..='9') => {
                     let num = self.read_number()?;
@@ -167,15 +227,15 @@ impl Lexer {
                 }
                 Some('λ') => {
                     self.advance();
-                    tokens.push(Token::KwLambda);
+                    tokens.push(Token::KwLambda(self.line, self.col));
                 }
                 Some('\\') => {
                     self.advance();
-                    tokens.push(Token::KwLambda);
+                    tokens.push(Token::KwLambda(self.line, self.col));
                 }
                 Some('"') => {
                     let s = self.read_string()?;
-                    tokens.push(Token::StringLit(s));
+                    tokens.push(Token::StringLit(s, self.line, self.col));
                 }
                 Some(c) => {
                     return Err(LexError::UnexpectedChar(c, self.line, self.col));
@@ -183,7 +243,7 @@ impl Lexer {
                 None => break,
             }
         }
-        tokens.push(Token::EOF);
+        tokens.push(Token::EOF(self.line, self.col));
         Ok(tokens)
     }
 
@@ -231,6 +291,8 @@ impl Lexer {
     fn read_number(&mut self) -> Result<Token, LexError> {
         let mut result = String::new();
         let mut has_dot = false;
+        let line = self.line;
+        let col = self.col;
 
         while let Some(c) = self.peek() {
             match c {
@@ -257,12 +319,12 @@ impl Lexer {
         let num_str = result.as_str();
         if has_dot {
             match num_str.parse::<f64>() {
-                Ok(n) => Ok(Token::FloatLit(n)),
+                Ok(n) => Ok(Token::FloatLit(n, line, col)),
                 Err(_) => Err(LexError::InvalidNumber(num_str.to_string())),
             }
         } else {
             match num_str.parse::<i64>() {
-                Ok(n) => Ok(Token::IntLit(n)),
+                Ok(n) => Ok(Token::IntLit(n, line, col)),
                 Err(_) => Err(LexError::InvalidNumber(num_str.to_string())),
             }
         }
@@ -331,32 +393,32 @@ impl Lexer {
 
     fn keyword_or_ident(&self, s: &str) -> Token {
         match s {
-            "let" => Token::KwLet,
-            "in" => Token::KwIn,
-            "match" => Token::KwMatch,
-            "view" => Token::KwView,
-            "with" => Token::KwWith,
-            "true" => Token::BoolLit(true),
-            "false" => Token::BoolLit(false),
-            "forall" => Token::KwForall,
-            "Unit" => Token::KwUnit,
-            "lambda" => Token::KwLambda,
-            "λ" => Token::KwLambda,
-            "pub" => Token::KwPub,
-            "use" => Token::KwUse,
-            "type" => Token::KwType,
-            "trait" => Token::KwTrait,
-            "impl" => Token::KwImpl,
-            "no_prelude" => Token::KwNoPrelude,
-            "where" => Token::KwWhere,
-            "val" => Token::KwVal,
-            "as" => Token::KwAs,
-            "Int" => Token::TyInt,
-            "Float" => Token::TyFloat,
-            "Char" => Token::TyChar,
-            "omega" => Token::MultiplicityOmega,
-            "()" => Token::UnitLit,
-            _ => Token::Ident(s.to_string()),
+            "let" => Token::KwLet(self.line, self.col),
+            "in" => Token::KwIn(self.line, self.col),
+            "match" => Token::KwMatch(self.line, self.col),
+            "view" => Token::KwView(self.line, self.col),
+            "with" => Token::KwWith(self.line, self.col),
+            "true" => Token::BoolLit(true, self.line, self.col),
+            "false" => Token::BoolLit(false, self.line, self.col),
+            "forall" => Token::KwForall(self.line, self.col),
+            "Unit" => Token::KwUnit(self.line, self.col),
+            "lambda" => Token::KwLambda(self.line, self.col),
+            "λ" => Token::KwLambda(self.line, self.col),
+            "pub" => Token::KwPub(self.line, self.col),
+            "use" => Token::KwUse(self.line, self.col),
+            "type" => Token::KwType(self.line, self.col),
+            "trait" => Token::KwTrait(self.line, self.col),
+            "impl" => Token::KwImpl(self.line, self.col),
+            "no_prelude" => Token::KwNoPrelude(self.line, self.col),
+            "where" => Token::KwWhere(self.line, self.col),
+            "val" => Token::KwVal(self.line, self.col),
+            "as" => Token::KwAs(self.line, self.col),
+            "Int" => Token::TyInt(self.line, self.col),
+            "Float" => Token::TyFloat(self.line, self.col),
+            "Char" => Token::TyChar(self.line, self.col),
+            "omega" => Token::MultiplicityOmega(self.line, self.col),
+            "()" => Token::UnitLit(self.line, self.col),
+            _ => Token::Ident(s.to_string(), self.line, self.col),
         }
     }
 }
