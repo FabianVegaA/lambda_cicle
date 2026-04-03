@@ -425,15 +425,20 @@ impl fmt::Display for Term {
                 )
             }
             Term::Constructor(name, args) => {
-                write!(
-                    f,
-                    "{}({})",
-                    name,
-                    args.iter()
-                        .map(|a| a.to_string())
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                )
+                if args.is_empty() {
+                    write!(f, "{}", name)
+                } else if args.len() == 1 {
+                    write!(f, "{} {}", name, args[0])
+                } else {
+                    write!(
+                        f,
+                        "({})",
+                        args.iter()
+                            .map(|a| a.to_string())
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    )
+                }
             }
             Term::NativeLiteral(lit) => write!(f, "{}", lit),
         }
