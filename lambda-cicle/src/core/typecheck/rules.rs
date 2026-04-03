@@ -220,6 +220,12 @@ pub fn type_check(term: &Term, ctx: &TypeContext) -> Result<(Type, TypeContext),
 
                 match remaining_ty {
                     Type::Arrow(_, expected_arg_ty, ret) => {
+                        if arg_ty != *expected_arg_ty {
+                            return Err(TypeError::TypeMismatch {
+                                expected: *expected_arg_ty.clone(),
+                                found: arg_ty,
+                            });
+                        }
                         remaining_ty = (*ret).clone();
                     }
                     _ => {

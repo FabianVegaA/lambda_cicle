@@ -1,5 +1,5 @@
 use crate::core::ast::terms::Term;
-use crate::core::ast::types::Type;
+use crate::core::ast::types::{MethodName, TraitName, Type};
 use crate::traits::registry::{Registry, TraitMethodImpl};
 
 /// Desugar trait method calls into direct primitive calls when possible.
@@ -29,10 +29,16 @@ fn desugar_recursive(term: &Term, registry: &Registry) -> Term {
         Term::App { fun, arg } => {
             let (args, base) = collect_app_chain(term);
 
+            // First, desugar all arguments so we can determine their types
+            let desugared_args: Vec<Term> = args
+                .iter()
+                .map(|a| desugar_recursive(a, registry))
+                .collect();
+
             // Try to resolve trait method call if base is a Var
             if let Term::Var(name) = &base {
-                if let Some(impl_) = resolve_trait_method_call(name, &args, registry) {
-                    let result = apply_resolution(impl_, args, registry);
+                if let Some(impl_) = resolve_trait_method_call(name, &desugared_args, registry) {
+                    let result = apply_resolution(impl_, desugared_args, registry);
                     return desugar_recursive(&result, registry);
                 }
             }
@@ -161,7 +167,10 @@ fn resolve_trait_method_call(
     args: &[Term],
     registry: &Registry,
 ) -> Option<TraitMethodImpl> {
-    let arg_types: Vec<Type> = args.iter().filter_map(get_type_of_term).collect();
+    let arg_types: Vec<Type> = args
+        .iter()
+        .filter_map(|a| get_type_of_term_with_registry(a, registry))
+        .collect();
 
     if let Some((_trait_name, _for_type, method_term)) =
         registry.find_method_by_name(method_name, &arg_types)
@@ -278,5 +287,75 @@ fn get_type_of_term(term: &Term) -> Option<Type> {
         Term::NativeLiteral(lit) => Some(lit.ty()),
         Term::Var(_) => None,
         _ => term.get_type(),
+    }
+}
+
+/// Get the type of a term using the registry for PrimCall terms
+fn get_type_of_term_with_registry(term: &Term, registry: &Registry) -> Option<Type> {
+    match term {
+        Term::NativeLiteral(lit) => Some(lit.ty()),
+        Term::Var(_) => None,
+        Term::PrimCall { prim_name, args } => {
+            let prim_type = prim_name_to_type(prim_name)?;
+            let mut remaining = prim_type;
+            for _arg in args {
+                if let Type::Arrow(_, _, ret) = remaining {
+                    remaining = *ret;
+                } else {
+                    return None;
+                }
+            }
+            Some(remaining)
+        }
+        _ => term.get_type(),
+    }
+}
+
+/// Map primitive names to their types
+fn prim_name_to_type(prim_name: &str) -> Option<Type> {
+    use crate::core::ast::types::Multiplicity;
+
+    match prim_name {
+        "prim_iadd" | "prim_isub" | "prim_imul" | "prim_irem" => Some(Type::arrow(
+            Type::int(),
+            Multiplicity::One,
+            Type::arrow(Type::int(), Multiplicity::One, Type::int()),
+        )),
+        "prim_idiv" => {
+            let division_by_zero = Type::inductive("DivisionByZero".to_string(), vec![]);
+            Some(Type::arrow(
+                Type::int(),
+                Multiplicity::One,
+                Type::arrow(
+                    Type::int(),
+                    Multiplicity::One,
+                    Type::inductive("Result".to_string(), vec![Type::int(), division_by_zero]),
+                ),
+            ))
+        }
+        "prim_fadd" | "prim_fsub" | "prim_fmul" | "prim_fdiv" | "prim_frem" => Some(Type::arrow(
+            Type::float(),
+            Multiplicity::One,
+            Type::arrow(Type::float(), Multiplicity::One, Type::float()),
+        )),
+        "prim_ieq" | "prim_igt" | "prim_ilt" | "prim_ige" | "prim_ile" => Some(Type::arrow(
+            Type::int(),
+            Multiplicity::One,
+            Type::arrow(
+                Type::int(),
+                Multiplicity::One,
+                Type::inductive("Bool".to_string(), vec![]),
+            ),
+        )),
+        "prim_feq" | "prim_fgt" | "prim_flt" | "prim_fge" | "prim_fle" => Some(Type::arrow(
+            Type::float(),
+            Multiplicity::One,
+            Type::arrow(
+                Type::float(),
+                Multiplicity::One,
+                Type::inductive("Bool".to_string(), vec![]),
+            ),
+        )),
+        _ => None,
     }
 }
