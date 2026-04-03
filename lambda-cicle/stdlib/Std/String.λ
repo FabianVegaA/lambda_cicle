@@ -23,7 +23,7 @@ pub val starts_with : &String -> &String -> Bool
 pub val ends_with : &String -> &String -> Bool
 pub val split : &String -> Char -> List &String
 
-impl Eq String with eq = prim_ceq
-impl Ord String with compare = prim_cord
-impl Hash String with hash = prim_chash
-impl Clone String with clone = \x : &String. x
+impl Eq for String with eq = prim_ceq
+impl Ord for String with compare = prim_cord
+impl Hash for String with hash = prim_chash
+impl Clone for String with clone = \x : &String. x

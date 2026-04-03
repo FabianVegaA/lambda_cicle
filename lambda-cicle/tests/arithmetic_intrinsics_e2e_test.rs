@@ -184,14 +184,24 @@ mod float_arithmetic {
 
     #[test]
     fn test_fdiv_e2e() {
-        let result = eval_expr("val main : Float = div 10.0 2.0").unwrap();
-        assert!((extract_float(result) - 5.0).abs() < 1e-10);
+        let result = eval_expr("val main : Result Float DivisionByZero = div 10.0 2.0").unwrap();
+        match result {
+            Term::Constructor(name, args) if name == "Ok" => {
+                assert!((extract_float(args[0].clone()) - 5.0).abs() < 1e-10);
+            }
+            _ => panic!("Expected Ok(5.0), got {:?}", result),
+        }
     }
 
     #[test]
     fn test_frem_e2e() {
-        let result = eval_expr("val main : Float = rem 10.0 3.0").unwrap();
-        assert!((extract_float(result) - 1.0).abs() < 1e-10);
+        let result = eval_expr("val main : Result Float DivisionByZero = rem 10.0 3.0").unwrap();
+        match result {
+            Term::Constructor(name, args) if name == "Ok" => {
+                assert!((extract_float(args[0].clone()) - 1.0).abs() < 1e-10);
+            }
+            _ => panic!("Expected Ok(1.0), got {:?}", result),
+        }
     }
 
     #[test]
@@ -331,26 +341,27 @@ mod char_operations {
 
     #[test]
     fn test_ceq_equal_e2e() {
-        let result = eval_expr("val main : Bool = eq 'a' 'a'").unwrap();
+        let result = eval_expr("use Std.String\n val main : Bool = eq \"a\" \"a\"").unwrap();
         assert!(extract_bool(result));
     }
 
     #[test]
     fn test_ceq_not_equal_e2e() {
-        let result = eval_expr("val main : Bool = eq 'a' 'b'").unwrap();
+        let result = eval_expr("use Std.String\n val main : Bool = eq \"a\" \"b\"").unwrap();
         assert!(!extract_bool(result));
     }
 
     #[test]
     fn test_chash_e2e() {
-        let result = eval_expr("val main : Int = hash 'a'").unwrap();
+        let result = eval_expr("use Std.String\n val main : Int = hash \"a\"").unwrap();
         let n = extract_int(result);
         assert!(n >= 0);
     }
 
     #[test]
     fn test_ord_c_e2e() {
-        let result = eval_expr("val main : Ordering = compare 'c' 'a'").unwrap();
+        let result =
+            eval_expr("use Std.String\n val main : Ordering = compare \"c\" \"a\"").unwrap();
         match result {
             Term::Constructor(name, _) if name == "GT" => {}
             _ => panic!("Expected GT, got {:?}", result),

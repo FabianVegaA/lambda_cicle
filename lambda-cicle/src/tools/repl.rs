@@ -161,8 +161,15 @@ Examples:
 
             (desugared, ty)
         } else {
+            // Also inject prelude for expressions, so we have access to trait methods
+            let mut decls = parse_program(expr).unwrap_or_default();
+            if let Err(e) = inject_prelude(&mut decls) {
+                // Ignore error, use empty decls
+            }
+            let registry = build_registry_from_decls(&decls);
+
             let term = parse(expr).map_err(ReplError::Parse)?;
-            let desugared = desugar_term(&term, &self.registry);
+            let desugared = desugar_term(&term, &registry);
             let ty = type_check_with_borrow_check(&desugared).map_err(ReplError::Type)?;
             (desugared, ty)
         };

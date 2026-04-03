@@ -15,7 +15,24 @@ pub fn type_check(term: &Term, ctx: &TypeContext) -> Result<(Type, TypeContext),
                 };
                 Ok((result_ty, ctx.clone()))
             }
-            None => Err(TypeError::UnknownVariable(name.clone())),
+            None => {
+                // Check if this might be a trait method call
+                let possible_traits = [
+                    "Add", "Sub", "Mul", "Div", "Rem", "Neg", "Eq", "Ord", "Hash", "Clone", "Copy",
+                ];
+                let is_possible_trait_method = possible_traits
+                    .iter()
+                    .any(|t| name.to_lowercase().contains(&t.to_lowercase()));
+
+                if is_possible_trait_method {
+                    Err(TypeError::UnknownVariable(format!(
+                        "'{}' - trait method not found. Make sure the type has an implementation of the required trait.",
+                        name
+                    )))
+                } else {
+                    Err(TypeError::UnknownVariable(name.clone()))
+                }
+            }
         },
         Term::Abs {
             var,

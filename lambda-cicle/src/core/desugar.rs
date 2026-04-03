@@ -172,7 +172,7 @@ fn resolve_trait_method_call(
         .filter_map(|a| get_type_of_term_with_registry(a, registry))
         .collect();
 
-    if let Some((_trait_name, _for_type, method_term)) =
+    if let Some((trait_name, for_type, method_term)) =
         registry.find_method_by_name(method_name, &arg_types)
     {
         if let Term::Var(var_name) = &method_term {
