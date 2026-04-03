@@ -204,13 +204,34 @@ pub fn type_check(term: &Term, ctx: &TypeContext) -> Result<(Type, TypeContext),
             Ok((constructor_info.result_type.clone(), ctx))
         }
         Term::NativeLiteral(lit) => Ok((lit.ty(), ctx.clone())),
-        Term::PrimCall { prim_name: _, args } => {
+        Term::PrimCall { prim_name, args } => {
+            let prim_ty = ctx
+                .get(prim_name)
+                .ok_or_else(|| TypeError::UnknownVariable(prim_name.clone()))?
+                .1
+                .clone();
+
             let mut current_ctx = ctx.clone();
+            let mut remaining_ty = prim_ty;
+
             for arg in args {
-                let (_, new_ctx) = type_check(arg, &current_ctx)?;
+                let (arg_ty, new_ctx) = type_check(arg, &current_ctx)?;
                 current_ctx = new_ctx;
+
+                match remaining_ty {
+                    Type::Arrow(_, expected_arg_ty, ret) => {
+                        remaining_ty = (*ret).clone();
+                    }
+                    _ => {
+                        return Err(TypeError::InvalidApplication(format!(
+                            "Primitive {} expects more arguments",
+                            prim_name
+                        )));
+                    }
+                }
             }
-            Ok((Type::unit(), current_ctx))
+
+            Ok((remaining_ty, current_ctx))
         }
     }
 }
