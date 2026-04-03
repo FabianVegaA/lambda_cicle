@@ -408,20 +408,12 @@ pub fn build_registry_from_decls(decls: &[crate::core::ast::Decl]) -> Registry {
 
             for method in methods {
                 // If method type is Unit (not specified), look it up from trait declaration
+                // and substitute type variables with the impl type
                 let method_ty = if method.ty == Type::unit() {
                     trait_methods
                         .get(&(trait_name.0.clone(), method.name.0.clone()))
-                        .cloned()
-                        .unwrap_or_else(|| {
-                            // Fallback: try to infer from impl type
-                            substitute_type_vars(
-                                &trait_methods
-                                    .get(&(trait_name.0.clone(), method.name.0.clone()))
-                                    .cloned()
-                                    .unwrap_or(Type::unit()),
-                                &ty,
-                            )
-                        })
+                        .map(|t| substitute_type_vars(t, ty))
+                        .unwrap_or_else(|| ty.clone())
                 } else {
                     method.ty.clone()
                 };

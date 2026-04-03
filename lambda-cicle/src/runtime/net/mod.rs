@@ -406,6 +406,12 @@ impl Net {
                 self.disconnect_port(*vn_id, *vn_port)?;
             }
 
+            let old_ports = {
+                let prim_node = self.get_node_mut(prim_id)?;
+                prim_node.ports.clone()
+            };
+            self.port_to_wire
+                .retain(|(node_port, _), _wire_id| node_port.0 != prim_id.0);
             let prim_node = self.get_node_mut(prim_id)?;
             *prim_node = Node::prim_val(result);
 

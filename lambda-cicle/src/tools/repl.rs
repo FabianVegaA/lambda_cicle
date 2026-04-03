@@ -20,10 +20,7 @@ impl Repl {
 
     pub fn with_debug_level(debug_level: Option<u8>) -> Self {
         let prelude_source = include_str!("../../stdlib/Prelude.λ");
-        let mut prelude_decls = parse_program(prelude_source).unwrap_or_default();
-        if let Err(e) = inject_prelude(&mut prelude_decls) {
-            eprintln!("Warning: Could not inject prelude: {}", e);
-        }
+        let prelude_decls = parse_program(prelude_source).unwrap_or_default();
         let registry = build_registry_from_decls(&prelude_decls);
 
         Repl {
@@ -149,8 +146,12 @@ Examples:
     fn eval_expr(&self, expr: &str) -> Result<Option<String>, ReplError> {
         let decls_result = parse_program(expr);
 
-        let (term, ty) = if let Ok(decls) = decls_result {
-            let registry = build_registry_from_decls(&self.prelude_decls);
+        let (term, ty) = if let Ok(mut decls) = decls_result {
+            if let Err(e) = inject_prelude(&mut decls) {
+                eprintln!("Warning: Could not inject prelude: {}", e);
+            }
+
+            let registry = build_registry_from_decls(&decls);
 
             let elaborated = elaborate_declarations(&decls)
                 .map_err(|e| ReplError::Parse(ParseError::SyntaxError(e.to_string())))?;

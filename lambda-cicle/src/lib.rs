@@ -25,14 +25,32 @@ pub enum PipelineError {
     Parse(ParseError),
     Typecheck(TypeError),
     Eval(runtime::evaluator::EvalError),
+    Module(ModuleError),
 }
 
-pub fn run_sequential(source: &str) -> Result<Option<Term>, PipelineError> {
-    let term = parse(source).map_err(PipelineError::Parse)?;
-    let _ty = type_check_with_borrow_check(&term).map_err(PipelineError::Typecheck)?;
-    let mut net = translate(&term);
+pub fn run_full(source: &str, debug_level: u8) -> Result<Option<Term>, PipelineError> {
+    let decls_result = parse_program(source);
+
+    let mut decls = decls_result.map_err(PipelineError::Parse)?;
+
+    if let Err(e) = inject_prelude(&mut decls) {
+        eprintln!("Warning: Could not load prelude: {}", e);
+    }
+
+    let registry = build_registry_from_decls(&decls);
+
+    let elaborated_term = elaborate_declarations(&decls).map_err(PipelineError::Module)?;
+
+    let desugared_term = desugar_term(&elaborated_term, &registry);
+
+    let _ty = type_check_with_borrow_check(&desugared_term).map_err(PipelineError::Typecheck)?;
+
+    let mut net = translate(&desugared_term);
+
     let evaluator = SequentialEvaluator::new();
-    evaluator.evaluate(&mut net).map_err(PipelineError::Eval)
+    evaluator
+        .evaluate_with_debug(&mut net, debug_level)
+        .map_err(PipelineError::Eval)
 }
 
 pub fn run_parallel(source: &str) -> Result<Option<Term>, PipelineError> {

@@ -22,21 +22,21 @@ pub val or : Bool -> Bool -> Bool = prim_or
 
 -- Equality and ordering traits (§16.2)
 pub trait Eq a where
-    val eq : &a -> &a -> Bool
+    val eq : a -> a -> Bool
 
 pub trait Ord a where Eq a
-    val compare : &a -> &a -> Ordering
-    val lt : &a -> &a -> Bool
-    val gt : &a -> &a -> Bool
-    val lte : &a -> &a -> Bool
-    val gte : &a -> &a -> Bool
+    val compare : a -> a -> Ordering
+    val lt : a -> a -> Bool
+    val gt : a -> a -> Bool
+    val lte : a -> a -> Bool
+    val gte : a -> a -> Bool
 
 pub trait Hash a where Eq a
-    val hash : &a -> Int
+    val hash : a -> Int
 
 -- Memory and lifetime traits (§16.2) - load-bearing
 pub trait Clone a where
-    val clone : &a -> a
+    val clone : a -> a
 
 pub trait Copy a where Clone a
 

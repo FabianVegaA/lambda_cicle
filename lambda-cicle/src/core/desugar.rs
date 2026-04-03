@@ -296,7 +296,13 @@ fn get_type_of_term_with_registry(term: &Term, registry: &Registry) -> Option<Ty
         Term::NativeLiteral(lit) => Some(lit.ty()),
         Term::Var(_) => None,
         Term::PrimCall { prim_name, args } => {
-            let prim_type = prim_name_to_type(prim_name)?;
+            let prim_type = match prim_name_to_type(prim_name) {
+                Some(t) => t,
+                None => {
+                    eprintln!("Warning: Unknown primitive '{}' in type inference, result type may be incorrect", prim_name);
+                    return None;
+                }
+            };
             let mut remaining = prim_type;
             for _arg in args {
                 if let Type::Arrow(_, _, ret) = remaining {
