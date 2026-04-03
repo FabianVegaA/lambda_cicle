@@ -32,6 +32,10 @@ enum Commands {
     Run {
         /// Source file to run
         file: PathBuf,
+
+        /// Show parsed AST without executing
+        #[arg(long)]
+        grammar: bool,
     },
 
     /// Type check a file without running
@@ -106,14 +110,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             run_repl_with_debug(debug)?;
         }
 
-        Commands::Run { file } => {
+        Commands::Run { file, grammar } => {
             let source = std::fs::read_to_string(&file)?;
 
             // Try parsing as declarations first
             let decls_result = parse_program(&source);
 
             let term: Term;
-            let _ty: lambda_cicle::Type;
+            let ty: lambda_cicle::Type;
 
             if let Ok(mut decls) = decls_result {
                 // Inject prelude if not opted out
@@ -124,6 +128,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 // Build the trait registry from declarations (includes prelude)
                 let registry = build_registry_from_decls(&decls);
 
+                // If --grammar flag, show AST and exit
+                if grammar {
+                    for decl in &decls {
+                        println!("{:#?}", decl);
+                    }
+                    return Ok(());
+                }
+
                 // Elaborate all declarations into a single executable term
                 match elaborate_declarations(&decls) {
                     Ok(elaborated_term) => {
@@ -132,20 +144,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         // Then type check the desugared term
                         let ty = type_check_with_borrow_check(&desugared_term)?;
                         term = desugared_term;
-                        _ty = ty;
                     }
                     Err(e) => {
                         eprintln!("Warning: Could not elaborate declarations: {}", e);
                         eprintln!("Falling back to expression parsing...");
                         // Fall back to parsing as expression
                         term = parse(&source)?;
-                        _ty = type_check_with_borrow_check(&term)?;
+                        ty = type_check_with_borrow_check(&term)?;
                     }
                 }
             } else {
                 // Fall back to parsing as expression
                 term = parse(&source)?;
-                _ty = type_check_with_borrow_check(&term)?;
+                ty = type_check_with_borrow_check(&term)?;
+
+                if grammar {
+                    println!("{:#?}", term);
+                    return Ok(());
+                }
             }
 
             let mut net = translate(&term);

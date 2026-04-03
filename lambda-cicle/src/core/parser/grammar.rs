@@ -632,7 +632,16 @@ impl<'a> Parser<'a> {
             Some(Token::Ident(name)) => {
                 let name = name.clone();
                 self.advance();
-                Ok(Term::var(name))
+                if name
+                    .chars()
+                    .next()
+                    .map(|c| c.is_uppercase())
+                    .unwrap_or(false)
+                {
+                    Ok(Term::Constructor(name, Vec::new()))
+                } else {
+                    Ok(Term::var(name))
+                }
             }
             Some(Token::KwLambda) => self.lambda_expr(),
             Some(Token::KwLet) => self.let_expr(),
