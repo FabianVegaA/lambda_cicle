@@ -124,6 +124,8 @@ impl Registry {
         method_name: &str,
         arg_types: &[Type],
     ) -> Option<(TraitName, Type, Term)> {
+        let mut matches: Vec<(TraitName, Type, Term)> = Vec::new();
+
         for ((trait_name, for_type), impl_) in &self.impls {
             if let Some(method_term) = impl_.methods.get(&MethodName::new(method_name)) {
                 if let Some(method_ty) = impl_.method_types.get(&MethodName::new(method_name)) {
@@ -134,7 +136,7 @@ impl Registry {
                         // The resolved for_type should be a concrete type (Native or Inductive)
                         // If it's still a type variable, the unification was invalid
                         if !matches!(resolved_for_type, Type::Var(_)) {
-                            return Some((
+                            matches.push((
                                 trait_name.clone(),
                                 for_type.clone(),
                                 method_term.clone(),
@@ -144,7 +146,29 @@ impl Registry {
                 }
             }
         }
-        None
+
+        // Sort matches for deterministic behavior:
+        // 1. Prefer Native over Inductive over other
+        // 2. Among Native types, prefer Int < Float < Bool < Char < Unit
+        // This ensures consistent method resolution regardless of HashMap iteration order
+        matches.sort_by(|a, b| {
+            fn type_order(t: &Type) -> (usize, usize) {
+                match t {
+                    Type::Native(crate::core::ast::types::NativeKind::Int) => (0, 0),
+                    Type::Native(crate::core::ast::types::NativeKind::Float) => (0, 1),
+                    Type::Native(crate::core::ast::types::NativeKind::Bool) => (0, 2),
+                    Type::Native(crate::core::ast::types::NativeKind::Char) => (0, 3),
+                    Type::Native(crate::core::ast::types::NativeKind::Unit) => (0, 4),
+                    Type::Inductive(_, _) => (1, 0),
+                    _ => (2, 0),
+                }
+            }
+            let a_order = type_order(&a.1);
+            let b_order = type_order(&b.1);
+            a_order.cmp(&b_order)
+        });
+
+        matches.into_iter().next()
     }
 }
 
