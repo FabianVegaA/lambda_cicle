@@ -64,7 +64,113 @@ pub fn inject_prelude(decls: &mut Vec<Decl>) -> Result<(), ModuleError> {
     combined.append(decls);
     *decls = combined;
 
+    // Also inject other imported modules
+    inject_modules(decls)
+}
+
+/// Inject all modules referenced by use declarations
+pub fn inject_modules(decls: &mut Vec<Decl>) -> Result<(), ModuleError> {
+    use crate::core::ast::UseMode;
+    use std::collections::HashSet;
+
+    // Collect all use declarations
+    let mut use_paths: Vec<(String, UseMode)> = Vec::new();
+    for decl in decls.iter() {
+        if let Decl::UseDecl { path, mode } = decl {
+            eprintln!("DEBUG: Found use statement: {:?}", path);
+            use_paths.push((path.join("."), mode.clone()));
+        }
+    }
+
+    if use_paths.is_empty() {
+        return Ok(());
+    }
+
+    // Track loaded modules to avoid duplicates and cycles
+    let mut loaded: HashSet<String> = HashSet::new();
+
+    // Load each module
+    for (module_path, _mode) in use_paths {
+        if loaded.contains(&module_path) {
+            eprintln!("DEBUG: Module {} already loaded, skipping", module_path);
+            continue;
+        }
+
+        eprintln!("DEBUG: Loading module {}", module_path);
+
+        // Convert module path to file path: Std.String -> stdlib/Std/String.λ
+        let file_path = module_path_to_file_path(&module_path)?;
+        eprintln!("DEBUG: Module file path: {:?}", file_path);
+
+        let module_decls = parse_module_decls(&file_path)?;
+        eprintln!(
+            "DEBUG: Parsed {} declarations from module",
+            module_decls.len()
+        );
+
+        // Log the impl declarations
+        for decl in &module_decls {
+            if let Decl::ImplDecl { ty, trait_name, .. } = decl {
+                eprintln!("DEBUG:   Found impl {} for {}", trait_name.0, ty);
+            }
+        }
+
+        // Recursively inject modules from the loaded module
+        // IMPORTANT: mark as loaded BEFORE recursion to avoid infinite loops
+        loaded.insert(module_path.clone());
+
+        let mut mod_decls = module_decls;
+
+        // Log what we're about to inject
+        eprintln!(
+            "DEBUG: About to inject {} declarations from {}",
+            mod_decls.len(),
+            module_path
+        );
+
+        if let Err(e) = inject_modules(&mut mod_decls) {
+            eprintln!(
+                "Warning: Could not inject dependencies of {}: {}",
+                module_path, e
+            );
+        }
+
+        // Log the final state
+        let new_impls = mod_decls
+            .iter()
+            .filter(|d| matches!(d, Decl::ImplDecl { .. }))
+            .count();
+        eprintln!("DEBUG: After injection, module has {} impls", new_impls);
+
+        // Add module declarations to the end
+        decls.extend(mod_decls);
+    }
+
     Ok(())
+}
+
+/// Convert module path like "Std.String" to file path "stdlib/Std/String.λ"
+fn module_path_to_file_path(module_path: &str) -> Result<std::path::PathBuf, ModuleError> {
+    // Find stdlib path
+    let stdlib_path = find_stdlib_path().ok_or_else(|| ModuleError {
+        message: "Could not find stdlib directory".to_string(),
+    })?;
+
+    // Convert "Std.String" -> "Std/String.λ"
+    let file_name = module_path.replace('.', "/");
+
+    let full_path = stdlib_path
+        .parent()
+        .unwrap_or(std::path::Path::new("."))
+        .join(format!("{}.λ", file_name));
+
+    if !full_path.exists() {
+        return Err(ModuleError {
+            message: format!("Module file not found: {}", full_path.display()),
+        });
+    }
+
+    Ok(full_path)
 }
 
 /// Elaborate a list of declarations into a single executable term.

@@ -1,3 +1,4 @@
+use crate::core::ast::Decl;
 use crate::core::parser::ParseError;
 use crate::core::typecheck::TypeError;
 use crate::runtime::evaluator::{Evaluator, SequentialEvaluator};
@@ -144,34 +145,62 @@ Examples:
     }
 
     fn eval_expr(&self, expr: &str) -> Result<Option<String>, ReplError> {
+        // Try parsing as program (declarations)
         let decls_result = parse_program(expr);
 
-        let (term, ty) = if let Ok(mut decls) = decls_result {
-            if let Err(e) = inject_prelude(&mut decls) {
+        // Try to get declarations even if it's just an expression (for use statements)
+        let mut all_decls = decls_result.unwrap_or_default();
+
+        // Try parsing as expression for non-program input
+        let parse_expr = parse(expr);
+
+        let (term, ty) = if !all_decls.is_empty() {
+            // We have declarations (possibly including use statements)
+            if let Err(e) = inject_prelude(&mut all_decls) {
                 eprintln!("Warning: Could not inject prelude: {}", e);
             }
 
-            let registry = build_registry_from_decls(&decls);
+            eprintln!("DEBUG: Total declarations: {}", all_decls.len());
 
-            let elaborated = elaborate_declarations(&decls)
+            // Count impl declarations
+            let impl_count = all_decls
+                .iter()
+                .filter(|d| matches!(d, Decl::ImplDecl { .. }))
+                .count();
+            eprintln!("DEBUG: Impl declarations: {}", impl_count);
+
+            let registry = build_registry_from_decls(&all_decls);
+
+            // Debug: list eq implementations
+            eprintln!("DEBUG: eq implementations in registry:");
+            for (trait_name, for_type, _) in registry.iter() {
+                if trait_name.0 == "Eq" {
+                    eprintln!("DEBUG:   - {:?}", for_type);
+                }
+            }
+
+            let elaborated = elaborate_declarations(&all_decls)
                 .map_err(|e| ReplError::Parse(ParseError::SyntaxError(e.to_string())))?;
 
             let desugared = desugar_term(&elaborated, &registry);
             let ty = type_check_with_borrow_check(&desugared).map_err(ReplError::Type)?;
 
             (desugared, ty)
-        } else {
-            // Also inject prelude for expressions, so we have access to trait methods
-            let mut decls = parse_program(expr).unwrap_or_default();
+        } else if let Ok(term) = parse_expr {
+            // Pure expression - still need prelude for trait methods
+            let mut decls = Vec::new();
             if let Err(e) = inject_prelude(&mut decls) {
-                // Ignore error, use empty decls
+                // Ignore error
             }
             let registry = build_registry_from_decls(&decls);
 
-            let term = parse(expr).map_err(ReplError::Parse)?;
             let desugared = desugar_term(&term, &registry);
             let ty = type_check_with_borrow_check(&desugared).map_err(ReplError::Type)?;
             (desugared, ty)
+        } else {
+            return Err(ReplError::Parse(ParseError::UnexpectedToken(
+                "Could not parse".to_string(),
+            )));
         };
 
         let mut net = translate(&term);
