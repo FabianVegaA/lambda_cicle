@@ -5,7 +5,7 @@ pub mod trace;
 
 pub use bench::run_benchmark;
 pub use dot::net_to_dot;
-pub use repl::run_repl;
+pub use repl::run_repl_with_debug;
 pub use trace::TraceDebugger;
 
 use crate::core::parser::ParseError;

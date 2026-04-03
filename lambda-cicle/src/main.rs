@@ -4,7 +4,7 @@ use lambda_cicle::modules::{
     elaborate_declarations, inject_prelude as lc_inject_prelude, Exports, Module,
 };
 use lambda_cicle::runtime::evaluator::{Evaluator, SequentialEvaluator};
-use lambda_cicle::tools::{net_to_dot, run_benchmark, run_repl, TraceDebugger};
+use lambda_cicle::tools::{net_to_dot, run_benchmark, run_repl_with_debug, TraceDebugger};
 use lambda_cicle::{
     build_registry_from_decls, desugar_term, parse, parse_program, translate,
     type_check_with_borrow_check, Term,
@@ -22,7 +22,11 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
     /// Start interactive REPL
-    Repl,
+    Repl {
+        /// Enable debug mode with specified level (1-3)
+        #[arg(short, long)]
+        debug: Option<u8>,
+    },
 
     /// Run a source file
     Run {
@@ -98,8 +102,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::Repl => {
-            run_repl()?;
+        Commands::Repl { debug } => {
+            run_repl_with_debug(debug)?;
         }
 
         Commands::Run { file } => {

@@ -10,10 +10,15 @@ pub struct Repl {
     history: Vec<String>,
     prelude_decls: Vec<crate::core::ast::Decl>,
     registry: crate::traits::registry::Registry,
+    debug_level: Option<u8>,
 }
 
 impl Repl {
     pub fn new() -> Self {
+        Self::with_debug_level(None)
+    }
+
+    pub fn with_debug_level(debug_level: Option<u8>) -> Self {
         let prelude_source = include_str!("../../stdlib/Prelude.λ");
         let mut prelude_decls = parse_program(prelude_source).unwrap_or_default();
         if let Err(e) = inject_prelude(&mut prelude_decls) {
@@ -25,6 +30,7 @@ impl Repl {
             history: Vec::new(),
             prelude_decls,
             registry,
+            debug_level,
         }
     }
 
@@ -72,6 +78,15 @@ impl Repl {
             return Ok(Some(self.help()));
         }
 
+        if line == ":debug" {
+            return Ok(Some(self.toggle_debug(None)));
+        }
+
+        if line.starts_with(":debug ") {
+            let arg = &line[7..].trim();
+            return Ok(Some(self.toggle_debug(Some(arg))));
+        }
+
         if line == ":type" {
             return Err(ReplError::Usage("Usage: :type <expression>".to_string()));
         }
@@ -89,10 +104,35 @@ impl Repl {
         self.eval_expr(line)
     }
 
+    fn toggle_debug(&mut self, arg: Option<&str>) -> String {
+        match arg {
+            Some("off") | Some("0") => {
+                self.debug_level = None;
+                "Debug mode: off".to_string()
+            }
+            Some("1") | Some("2") | Some("3") => {
+                let level = arg.unwrap().parse().unwrap();
+                self.debug_level = Some(level);
+                format!("Debug mode: level {}", level)
+            }
+            None => {
+                if self.debug_level.is_some() {
+                    self.debug_level = None;
+                    "Debug mode: off".to_string()
+                } else {
+                    self.debug_level = Some(1);
+                    "Debug mode: on (level 1)".to_string()
+                }
+            }
+            _ => "Usage: :debug [1|2|3|off]".to_string(),
+        }
+    }
+
     fn help(&self) -> String {
         r#"
 Commands:
   :type <expr>   Show type of expression
+  :debug [1|2|3] Toggle or set debug level (1=steps, 2=+nodes, 3=+net)
   :load <file>   Load and run file (not implemented)
   :clear         Clear screen
   :help, :h     Show this help
@@ -128,7 +168,15 @@ Examples:
 
         let mut net = translate(&term);
         let evaluator = SequentialEvaluator::new();
-        let result = evaluator.evaluate(&mut net).map_err(ReplError::Eval)?;
+        let result = if let Some(level) = self.debug_level {
+            if level > 0 {
+                eprintln!("[debug] Evaluating expression with debug level {}", level);
+            }
+            evaluator.evaluate_with_debug(&mut net, level)
+        } else {
+            evaluator.evaluate(&mut net)
+        }
+        .map_err(ReplError::Eval)?;
 
         Ok(result.map(|r| format!("{} : {}", r, ty)))
     }
@@ -148,7 +196,11 @@ impl Default for Repl {
 }
 
 pub fn run_repl() -> Result<(), ReplError> {
-    let mut repl = Repl::new();
+    run_repl_with_debug(None)
+}
+
+pub fn run_repl_with_debug(debug_level: Option<u8>) -> Result<(), ReplError> {
+    let mut repl = Repl::with_debug_level(debug_level);
     repl.run()
 }
 

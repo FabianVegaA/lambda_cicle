@@ -9,6 +9,14 @@ use crate::runtime::net::{Agent, Net, NodeId, PortIndex};
 
 pub trait Evaluator {
     fn evaluate(&self, net: &mut Net) -> Result<Option<Term>, EvalError>;
+
+    fn evaluate_with_debug(
+        &self,
+        net: &mut Net,
+        debug_level: u8,
+    ) -> Result<Option<Term>, EvalError> {
+        self.evaluate(net)
+    }
 }
 
 #[derive(Debug)]
