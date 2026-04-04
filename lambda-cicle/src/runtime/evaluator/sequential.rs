@@ -136,7 +136,7 @@ fn extract_result(net: &Net) -> Result<Term, ExtractionError> {
         return Ok(Term::NativeLiteral(Literal::Unit));
     }
 
-    for (_node_id, node) in net.nodes().iter().enumerate() {
+    for (node_id, node) in net.nodes().iter().enumerate() {
         match &node.agent {
             Agent::PrimVal(PrimVal::Constructor(name, args)) => {
                 let term_args: Vec<Term> = args
@@ -175,6 +175,28 @@ fn extract_result(net: &Net) -> Result<Term, ExtractionError> {
                 }
                 if let Ok(n) = name.parse::<i64>() {
                     return Ok(Term::NativeLiteral(Literal::Int(n)));
+                }
+            }
+            Agent::Lambda => {
+                // Lambda should have been reduced, but try to extract from body
+                let node_id = NodeId(node_id);
+                if let Some((body_node, _body_port)) = net.get_connected_port(node_id, PortIndex(2))
+                {
+                    // Try to recursively extract from the body
+                    // Create a temporary subnet focused on the body
+                    if let Some(body_node_ref) = net.get_node(body_node) {
+                        match &body_node_ref.agent {
+                            Agent::PrimVal(val) => {
+                                if let Some(term) = prim_val_to_term(val) {
+                                    return Ok(term);
+                                }
+                            }
+                            Agent::Constructor(name) => {
+                                return Ok(Term::Constructor(name.clone(), vec![], None));
+                            }
+                            _ => {}
+                        }
+                    }
                 }
             }
             _ => {}

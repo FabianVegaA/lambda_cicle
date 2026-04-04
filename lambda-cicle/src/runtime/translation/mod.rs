@@ -2,14 +2,19 @@ use crate::core::ast::types::Multiplicity;
 use crate::core::ast::{Arm, Literal, Pattern, Term};
 use crate::runtime::net::{Net, Node, NodeId, Port, PortIndex, Wire};
 use crate::runtime::primitives::{prim_name_to_io_op, prim_name_to_op, PrimVal};
+use std::collections::HashMap;
 
 pub struct NetBuilder {
     net: Net,
+    env: HashMap<String, NodeId>,
 }
 
 impl NetBuilder {
     pub fn new() -> NetBuilder {
-        NetBuilder { net: Net::new() }
+        NetBuilder {
+            net: Net::new(),
+            env: HashMap::new(),
+        }
     }
 
     pub fn build(mut self, term: &Term) -> Net {
@@ -28,14 +33,17 @@ impl NetBuilder {
             } => self.translate_abs(multiplicity, body),
             Term::App { fun, arg } => self.translate_app(fun, arg),
             Term::Let {
-                var: _,
+                var,
                 multiplicity: _,
                 annot: _,
                 value,
                 body,
             } => {
                 let value_id = self.translate_term(value);
+                // Bind the variable name to the value node for variable resolution
+                self.env.insert(var.clone(), value_id);
                 let body_id = self.translate_term(body);
+                self.env.remove(var); // Clean up after body translation
                 self.connect_ports(value_id, 1, body_id, 0);
                 body_id
             }
@@ -53,6 +61,11 @@ impl NetBuilder {
     }
 
     fn translate_var(&mut self, name: &str) -> NodeId {
+        // Check if this variable is bound in the environment (let-bound variable)
+        if let Some(&node_id) = self.env.get(name) {
+            return node_id;
+        }
+
         // Check if this is a prim_io_* intrinsic
         if let Some(io_op) = prim_name_to_io_op(name) {
             let node = Node::prim_io(io_op);

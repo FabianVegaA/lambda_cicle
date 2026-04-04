@@ -231,6 +231,10 @@ impl Lexer {
                     let s = self.read_string()?;
                     tokens.push(Token::StringLit(s, self.line, self.col));
                 }
+                Some('\'') => {
+                    let c = self.read_char()?;
+                    tokens.push(Token::CharLit(c, self.line, self.col));
+                }
                 Some(c) => {
                     return Err(LexError::UnexpectedChar(c, self.line, self.col));
                 }
@@ -372,6 +376,56 @@ impl Lexer {
         Ok(result)
     }
 
+    fn read_char(&mut self) -> Result<char, LexError> {
+        self.advance(); // consume opening '
+        let line = self.line;
+        let col = self.col;
+
+        let c = match self.peek() {
+            None => return Err(LexError::UnexpectedChar('\'', line, col)),
+            Some('\\') => {
+                self.advance(); // consume \
+                match self.peek() {
+                    Some('n') => {
+                        self.advance();
+                        '\n'
+                    }
+                    Some('t') => {
+                        self.advance();
+                        '\t'
+                    }
+                    Some('\\') => {
+                        self.advance();
+                        '\\'
+                    }
+                    Some('\'') => {
+                        self.advance();
+                        '\''
+                    }
+                    Some(c) => {
+                        self.advance();
+                        return Err(LexError::InvalidEscapeSequence(c, line, col));
+                    }
+                    None => return Err(LexError::UnexpectedChar('\\', line, col)),
+                }
+            }
+            Some(c) => {
+                self.advance();
+                c
+            }
+        };
+
+        // Expect closing '
+        match self.peek() {
+            Some('\'') => {
+                self.advance();
+                Ok(c)
+            }
+            Some(_) => Err(LexError::TooManyChars(line, col)),
+            None => Err(LexError::UnexpectedChar('\'', line, col)),
+        }
+    }
+
     fn read_identifier(&mut self) -> Result<String, LexError> {
         let mut result = String::new();
         while let Some(c) = self.peek() {
@@ -419,6 +473,8 @@ impl Lexer {
 pub enum LexError {
     UnexpectedChar(char, usize, usize),
     InvalidNumber(String),
+    InvalidEscapeSequence(char, usize, usize),
+    TooManyChars(usize, usize),
 }
 
 impl std::fmt::Display for LexError {
@@ -432,6 +488,16 @@ impl std::fmt::Display for LexError {
                 )
             }
             LexError::InvalidNumber(s) => write!(f, "Invalid number: {}", s),
+            LexError::InvalidEscapeSequence(c, line, col) => write!(
+                f,
+                "Invalid escape sequence '\\{}' at line {}, column {}",
+                c, line, col
+            ),
+            LexError::TooManyChars(line, col) => write!(
+                f,
+                "Too many characters in char literal at line {}, column {}",
+                line, col
+            ),
         }
     }
 }

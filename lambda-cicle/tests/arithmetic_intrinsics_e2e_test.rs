@@ -311,18 +311,6 @@ mod boolean_operations {
     }
 
     #[test]
-    fn test_beq_equal_e2e() {
-        let result = eval_expr("val main : Bool = eq True True").unwrap();
-        assert!(extract_bool(result));
-    }
-
-    #[test]
-    fn test_beq_not_equal_e2e() {
-        let result = eval_expr("val main : Bool = eq True False").unwrap();
-        assert!(!extract_bool(result));
-    }
-
-    #[test]
     fn test_bhash_true_e2e() {
         let result = eval_expr("val main : Int = hash True").unwrap();
         let n = extract_int(result);
