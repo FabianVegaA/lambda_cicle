@@ -16,9 +16,17 @@ pub type Ordering (..) = LT | EQ | GT
 pub type DivisionByZero (..) = DivisionByZero
 
 -- Boolean functions (§16.2)
-pub val not : Bool -> Bool = prim_not
-pub val and : Bool -> Bool -> Bool = prim_and
-pub val or : Bool -> Bool -> Bool = prim_or
+pub val not : Bool -> Bool = \x: Bool. match x with
+    { True => False
+    | False => True }
+pub val and : Bool -> Bool -> Bool = \x: Bool. \y: Bool.
+    match x with
+        { True => y
+        | False => False }
+pub val or : Bool -> Bool -> Bool = \x: Bool. \y: Bool.
+    match x with
+        { True => True
+        | False => y }
 
 -- Equality and ordering traits (§16.2)
 pub trait Eq a where
@@ -77,9 +85,10 @@ pub trait Monad f where Applicative f
     val then : f a -> f b -> f b
 
 -- Native type implementations (§16.2, Native Type Impl Matrix)
-impl Eq for Bool with eq = prim_beq
-impl Ord for Bool with compare = prim_beq
-impl Hash for Bool with hash = prim_bhash
+impl Eq for Bool with eq = \x : Bool. \y : Bool. match x with
+    { True => match y with { True => True | False => False }
+    | False => match y with { True => False | False => True }
+    }
 impl Clone for Bool with clone = \x : &Bool. x
 impl Copy for Bool
 impl Functor for Bool with fmap = \f : a -> b. \x : Bool. x
@@ -177,7 +186,7 @@ impl Monad for (Result e) with
 -- Trait method wrappers for Int (§16.3)
 -- TODO: Replace with proper polymorphic trait method resolution
 pub val add : Int -> Int -> Int = prim_iadd
-pub val sub : Int -> Int -> Int = prim_isub  
+pub val sub : Int -> Int -> Int = prim_isub
 pub val mul : Int -> Int -> Int = prim_imul
 pub val div : Int -> Int -> Result Int DivisionByZero = prim_idiv
 pub val rem : Int -> Int -> Result Int DivisionByZero = prim_irem

@@ -1,19 +1,11 @@
 use lambda_cicle::core::ast::{Literal, Term, Type};
 use lambda_cicle::core::typecheck::type_check_with_borrow_check;
-use quickcheck::{quickcheck, Arbitrary, Gen};
+use quickcheck::quickcheck;
 
 fn type_int_literal(_dummy: u8) -> bool {
     let term = Term::NativeLiteral(Literal::Int(42));
     match type_check_with_borrow_check(&term) {
         Ok(ty) => ty == Type::int(),
-        Err(_) => false,
-    }
-}
-
-fn type_bool_literal(_dummy: u8) -> bool {
-    let term = Term::NativeLiteral(Literal::Bool(true));
-    match type_check_with_borrow_check(&term) {
-        Ok(ty) => ty == Type::bool(),
         Err(_) => false,
     }
 }
@@ -42,7 +34,7 @@ fn type_lambda_int_to_int(_dummy: u8) -> bool {
         Term::var("x"),
     );
     match type_check_with_borrow_check(&term) {
-        Ok(ty) => matches!(ty, Type::Arrow(_, arg, ret) 
+        Ok(ty) => matches!(ty, Type::Arrow(_, arg, ret)
             if *arg == Type::int() && *ret == Type::int()),
         Err(_) => false,
     }
@@ -72,7 +64,7 @@ fn type_lambda_wrong_arg_type(_dummy: u8) -> bool {
             Type::int(),
             Term::var("x"),
         )),
-        arg: Box::new(Term::NativeLiteral(Literal::Bool(true))),
+        arg: Box::new(Term::NativeLiteral(Literal::Float(5.0))),
     };
     match type_check_with_borrow_check(&term) {
         Err(_) => true,
@@ -136,11 +128,6 @@ fn type_arrow_reflexive(_dummy: u8) -> bool {
 #[test]
 fn qc_type_int_literal() {
     quickcheck(type_int_literal as fn(u8) -> bool);
-}
-
-#[test]
-fn qc_type_bool_literal() {
-    quickcheck(type_bool_literal as fn(u8) -> bool);
 }
 
 #[test]

@@ -13,17 +13,6 @@ fn test_parse_int_literal() {
 }
 
 #[test]
-fn test_parse_bool_literal() {
-    let result = parse("true");
-    assert!(result.is_ok());
-    let term = result.unwrap();
-    match term {
-        Term::NativeLiteral(Literal::Bool(b)) => assert!(b),
-        _ => panic!("Expected bool literal"),
-    }
-}
-
-#[test]
 fn test_parse_variable() {
     let result = parse("x");
     assert!(result.is_ok());
@@ -453,8 +442,11 @@ fn test_simple_prelude_types() {
 fn test_minimal() {
     use lambda_cicle::core::parser::parse_program;
     let source = std::fs::read_to_string("/tmp/minimal_test.λ").unwrap();
-    println!("Source:
-{}", source);
+    println!(
+        "Source:
+{}",
+        source
+    );
     let result = parse_program(&source);
     println!("Result: {:?}", result);
     assert!(result.is_ok(), "Should parse");
@@ -463,8 +455,11 @@ fn test_minimal() {
 fn test_two() {
     use lambda_cicle::core::parser::parse_program;
     let source = std::fs::read_to_string("/tmp/test2.λ").unwrap();
-    println!("Source:
-{}", source);
+    println!(
+        "Source:
+{}",
+        source
+    );
     let result = parse_program(&source);
     println!("Result: {:?}", result);
     assert!(result.is_ok(), "Should parse");
@@ -500,8 +495,11 @@ fn test_types() {
 fn test_val() {
     use lambda_cicle::core::parser::parse_program;
     let source = std::fs::read_to_string("/tmp/test_val.λ").unwrap();
-    println!("Source:
-{}", source);
+    println!(
+        "Source:
+{}",
+        source
+    );
     let result = parse_program(&source);
     println!("Result: {:?}", result);
     assert!(result.is_ok(), "Should parse");

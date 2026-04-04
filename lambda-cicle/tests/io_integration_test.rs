@@ -1,5 +1,5 @@
 use lambda_cicle::runtime::evaluator::Evaluator;
-use lambda_cicle::runtime::net::{Agent, InteractionResult, Net, Node, NodeId, PortIndex};
+use lambda_cicle::runtime::net::{Agent, InteractionResult, Net, Node, PortIndex};
 use lambda_cicle::runtime::primitives::{prim_name_to_io_op, IOOp, PrimVal, INTRINSICS_TABLE};
 
 #[test]
@@ -155,24 +155,12 @@ fn test_prim_io_print_fires_with_token() {
 }
 
 #[test]
-fn test_prim_io_println_arity() {
-    let node = Node::prim_io(IOOp::Println);
-    let id = net::Net::new().add_node(node);
-    // Println should have arity 1 (one argument + IO token)
-    // The node is created with ports: 0 (result), 1 (token), 2+ (args)
-}
-
-#[test]
 fn test_prim_io_write_arity() {
     let node = Node::prim_io(IOOp::Write);
     match node.agent {
         Agent::PrimIO(IOOp::Write) => {}
         _ => panic!("Expected PrimIO(Write)"),
     }
-}
-
-mod net {
-    pub use lambda_cicle::runtime::net::Net;
 }
 
 #[test]

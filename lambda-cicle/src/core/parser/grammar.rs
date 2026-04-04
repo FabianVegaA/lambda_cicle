@@ -187,7 +187,6 @@ impl<'a> Parser<'a> {
                     .unwrap_or(false)
                     || known_ctors.contains(&name.as_str())
             }
-            Some(Token::KwTrue(_, _)) | Some(Token::KwFalse(_, _)) => true,
             _ => false,
         };
 
@@ -635,12 +634,9 @@ impl<'a> Parser<'a> {
                 | Some(Token::KwView(_, _))
                 | Some(Token::IntLit(_, _, _))
                 | Some(Token::FloatLit(_, _, _))
-                | Some(Token::BoolLit(_, _, _))
                 | Some(Token::CharLit(_, _, _))
                 | Some(Token::StringLit(_, _, _))
                 | Some(Token::UnitLit(_, _))
-                | Some(Token::KwTrue(_, _))
-                | Some(Token::KwFalse(_, _))
         )
     }
 
@@ -656,11 +652,7 @@ impl<'a> Parser<'a> {
                 self.advance();
                 Ok(Term::literal(Literal::Float(val)))
             }
-            Some(Token::BoolLit(b, _, _)) => {
-                let val = *b;
-                self.advance();
-                Ok(Term::literal(Literal::Bool(val)))
-            }
+
             Some(Token::CharLit(c, _, _)) => {
                 let val = *c;
                 self.advance();
@@ -679,14 +671,7 @@ impl<'a> Parser<'a> {
                 self.advance();
                 Ok(Term::literal(Literal::Unit))
             }
-            Some(Token::KwTrue(_, _)) => {
-                self.advance();
-                Ok(Term::Constructor("True".to_string(), Vec::new()))
-            }
-            Some(Token::KwFalse(_, _)) => {
-                self.advance();
-                Ok(Term::Constructor("False".to_string(), Vec::new()))
-            }
+
             Some(Token::Ident(name, _, _)) => {
                 let name = name.clone();
                 self.advance();
@@ -696,7 +681,7 @@ impl<'a> Parser<'a> {
                     .map(|c| c.is_uppercase())
                     .unwrap_or(false)
                 {
-                    Ok(Term::Constructor(name, Vec::new()))
+                    Ok(Term::Constructor(name, Vec::new(), None))
                 } else {
                     Ok(Term::var(name))
                 }
@@ -820,6 +805,8 @@ impl<'a> Parser<'a> {
             }
         };
 
+        self.update_pos();
+
         // Type annotation is optional
         let (mult, annot) = if matches!(self.peek(), Some(&Token::Colon(_, _))) {
             self.advance();
@@ -878,16 +865,25 @@ impl<'a> Parser<'a> {
             let annot = self.ty()?;
             (mult, annot)
         } else {
-            // No type annotation - require explicit annotations for now
+            // No type annotation - use unit type, but check if body follows directly with '.'
             (Multiplicity::One, Type::unit())
         };
 
-        self.consume(&Token::Equals(self.line, self.col))?;
-        let value = self.term()?;
-        self.consume(&Token::KwIn(self.line, self.col))?;
-        let body = self.term()?;
+        // Check for lambda body - can be '.' or '=>' for let expressions
+        if matches!(self.peek(), Some(&Token::Dot(_, _))) {
+            // Lambda body: \x. body
+            self.consume(&Token::Dot(self.line, self.col))?;
+            let body = self.term()?;
+            Ok(Term::abs(var, mult, annot, body))
+        } else {
+            // Let expression: \x = val in body
+            self.consume(&Token::Equals(self.line, self.col))?;
+            let value = self.term()?;
+            self.consume(&Token::KwIn(self.line, self.col))?;
+            let body = self.term()?;
 
-        Ok(Term::let_in(var, mult, annot, value, body))
+            Ok(Term::let_in(var, mult, annot, value, body))
+        }
     }
 
     fn match_expr(&mut self) -> Result<Term, ParseError> {
@@ -1062,9 +1058,8 @@ impl<'a> Parser<'a> {
                 | Some(&Token::TyChar(_, _))
                 | Some(&Token::KwUnit(_, _))
                 | Some(&Token::LParen(_, _))
-                | Some(&Token::KwTrue(_, _))  // Bool constructors
-                | Some(&Token::KwFalse(_, _))
                 | Some(&Token::Ident(_, _, _)) // All identifiers (both uppercase constructors and lowercase type variables)
+                | Some(&Token::MultiplicityBorrow(_, _)) // Borrow types like &Int
         )
     }
 
@@ -1105,14 +1100,7 @@ impl<'a> Parser<'a> {
                     Ok(Type::inductive(name, vec![]))
                 }
             }
-            Some(Token::KwTrue(_, _)) => {
-                self.advance();
-                Ok(Type::inductive("True".to_string(), vec![]))
-            }
-            Some(Token::KwFalse(_, _)) => {
-                self.advance();
-                Ok(Type::inductive("False".to_string(), vec![]))
-            }
+
             Some(Token::LParen(_, _)) => {
                 self.consume(&Token::LParen(self.line, self.col))?;
                 let ty = self.ty()?;
@@ -1181,14 +1169,6 @@ impl<'a> Parser<'a> {
                     Ok(Pattern::Constructor(name, args))
                 }
             }
-            Some(Token::KwTrue(_, _)) => {
-                self.advance();
-                Ok(Pattern::Constructor("True".to_string(), Vec::new()))
-            }
-            Some(Token::KwFalse(_, _)) => {
-                self.advance();
-                Ok(Pattern::Constructor("False".to_string(), Vec::new()))
-            }
             Some(Token::LParen(_, _)) => self.pattern_parens(),
             _ => Err(ParseError::UnexpectedToken(
                 "expected pattern".to_string(),
@@ -1256,14 +1236,6 @@ impl<'a> Parser<'a> {
             Some(Token::KwUnit(_, _)) => {
                 self.advance();
                 Ok("Unit".to_string())
-            }
-            Some(Token::KwTrue(_, _)) => {
-                self.advance();
-                Ok("True".to_string())
-            }
-            Some(Token::KwFalse(_, _)) => {
-                self.advance();
-                Ok("False".to_string())
             }
             Some(token) => Err(ParseError::ExpectedToken {
                 expected: "identifier".to_string(),

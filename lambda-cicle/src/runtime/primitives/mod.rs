@@ -57,10 +57,10 @@ impl IOOp {
 pub enum PrimVal {
     Int(i64),
     Float(f64),
-    Bool(bool),
     Char(char),
     Unit,
     String(String),
+    Bool(bool),
     Constructor(String, Vec<PrimVal>),
 }
 
@@ -69,11 +69,11 @@ impl PrimVal {
         match self {
             PrimVal::Int(_) => NativeKind::Int,
             PrimVal::Float(_) => NativeKind::Float,
-            PrimVal::Bool(_) => NativeKind::Bool,
             PrimVal::Char(_) => NativeKind::Char,
             PrimVal::Unit => NativeKind::Unit,
             PrimVal::String(_) => NativeKind::Unit,
             PrimVal::Constructor(_, _) => NativeKind::Unit,
+            PrimVal::Bool(_) => NativeKind::Bool,
         }
     }
 }
@@ -110,12 +110,6 @@ pub static INTRINSICS_TABLE: &[&str] = &[
     "prim_fge",
     "prim_flt",
     "prim_fle",
-    // Boolean operations (§16.3.1)
-    "prim_bnot",
-    "prim_band",
-    "prim_bor",
-    "prim_beq",
-    "prim_bhash",
     // Char operations (§16.3.1)
     "prim_ceq",
     "prim_cord",

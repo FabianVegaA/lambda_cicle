@@ -1,4 +1,4 @@
-use lambda_cicle::core::ast::{Decl, Pattern, Term, TraitName};
+use lambda_cicle::core::ast::{Decl, Term};
 use lambda_cicle::{parse, parse_program};
 use quickcheck::{quickcheck, Arbitrary, Gen};
 
@@ -101,7 +101,7 @@ mod arrow_types {
         assert!(result.is_ok());
         if let Ok(decls) = result {
             if let Decl::TypeDecl { ty, .. } = &decls[0] {
-                if let lambda_cicle::core::ast::Type::Arrow(_, left, right) = ty {
+                if let lambda_cicle::core::ast::Type::Arrow(_, _, right) = ty {
                     if let lambda_cicle::core::ast::Type::Arrow(_, _, _) = **right {
                         return;
                     }

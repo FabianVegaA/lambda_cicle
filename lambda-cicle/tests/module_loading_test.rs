@@ -2,7 +2,6 @@ use lambda_cicle::core::parser::parse_program;
 use lambda_cicle::modules::loader::{
     detect_cycles, extract_imports, verify_no_cycles, ImportGraph,
 };
-use std::collections::HashMap;
 
 #[test]
 fn test_parse_use_statements() {

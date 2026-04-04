@@ -54,9 +54,7 @@ impl Repl {
 
             match self.eval_line(line) {
                 Ok(result) => {
-                    if let Some(s) = result {
-                        println!("{}", s);
-                    }
+                    println!("{}", result);
                 }
                 Err(e) => {
                     println!("Error: {}", e);
@@ -67,22 +65,22 @@ impl Repl {
         Ok(())
     }
 
-    fn eval_line(&mut self, line: &str) -> Result<Option<String>, ReplError> {
+    fn eval_line(&mut self, line: &str) -> Result<String, ReplError> {
         if line == ":quit" || line == ":q" {
-            return Ok(Some("Goodbye!".to_string()));
+            return Ok("Goodbye!".to_string());
         }
 
         if line == ":help" || line == ":h" {
-            return Ok(Some(self.help()));
+            return Ok(self.help());
         }
 
         if line == ":debug" {
-            return Ok(Some(self.toggle_debug(None)));
+            return Ok(self.toggle_debug(None));
         }
 
         if line.starts_with(":debug ") {
             let arg = &line[7..].trim();
-            return Ok(Some(self.toggle_debug(Some(arg))));
+            return Ok(self.toggle_debug(Some(arg)));
         }
 
         if line == ":type" {
@@ -96,7 +94,7 @@ impl Repl {
 
         if line == ":clear" {
             print!("\x1B[2J\x1B[1J");
-            return Ok(None);
+            return Ok("".to_string()); // TODO: Implement clear
         }
 
         self.eval_expr(line)
@@ -144,7 +142,7 @@ Examples:
         .to_string()
     }
 
-    fn eval_expr(&self, expr: &str) -> Result<Option<String>, ReplError> {
+    fn eval_expr(&self, expr: &str) -> Result<String, ReplError> {
         // Try parsing as program (declarations)
         let decls_result = parse_program(expr);
 
@@ -154,7 +152,7 @@ Examples:
         // Try parsing as expression for non-program input
         let parse_expr = parse(expr);
 
-        let (term, ty) = if !all_decls.is_empty() {
+        let (term, _) = if !all_decls.is_empty() {
             // We have declarations (possibly including use statements)
             if let Err(e) = inject_prelude(&mut all_decls) {
                 eprintln!("Warning: Could not inject prelude: {}", e);
@@ -190,7 +188,7 @@ Examples:
             // Pure expression - still need prelude for trait methods
             let mut decls = Vec::new();
             if let Err(e) = inject_prelude(&mut decls) {
-                // Ignore error
+                eprintln!("Error injecting prelude: {}", e.message);
             }
             let registry = build_registry_from_decls(&decls);
 
@@ -205,24 +203,27 @@ Examples:
 
         let mut net = translate(&term);
         let evaluator = SequentialEvaluator::new();
-        let result = if let Some(level) = self.debug_level {
+
+        if let Some(level) = self.debug_level {
             if level > 0 {
                 eprintln!("[debug] Evaluating expression with debug level {}", level);
             }
-            evaluator.evaluate_with_debug(&mut net, level)
-        } else {
-            evaluator.evaluate(&mut net)
+            return evaluator
+                .evaluate_with_debug(&mut net, level)
+                .map_err(ReplError::Eval)
+                .map(|r| format!("{}", r));
         }
-        .map_err(ReplError::Eval)?;
-
-        Ok(result.map(|r| format!("{} : {}", r, ty)))
+        return evaluator
+            .evaluate(&mut net)
+            .map_err(ReplError::Eval)
+            .map(|r| format!("{}", r));
     }
 
-    fn typecheck_expr(&self, expr: &str) -> Result<Option<String>, ReplError> {
+    fn typecheck_expr(&self, expr: &str) -> Result<String, ReplError> {
         let term = parse(expr).map_err(ReplError::Parse)?;
         let ty = type_check_with_borrow_check(&term).map_err(ReplError::Type)?;
 
-        Ok(Some(format!("{}", ty)))
+        Ok(format!("{}", ty))
     }
 }
 

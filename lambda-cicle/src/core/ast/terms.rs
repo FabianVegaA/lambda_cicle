@@ -6,7 +6,6 @@ use std::fmt;
 pub enum Literal {
     Int(i64),
     Float(f64),
-    Bool(bool),
     Char(char),
     Str(String),
     Unit,
@@ -19,7 +18,6 @@ impl Literal {
         match self {
             Literal::Int(_) => Type::int(),
             Literal::Float(_) => Type::float(),
-            Literal::Bool(_) => Type::bool(),
             Literal::Char(_) => Type::char(),
             Literal::Str(_) => Type::inductive("String", vec![]),
             Literal::Unit => Type::unit(),
@@ -60,7 +58,6 @@ impl fmt::Display for Literal {
         match self {
             Literal::Int(n) => write!(f, "{}", n),
             Literal::Float(n) => write!(f, "{}", n),
-            Literal::Bool(b) => write!(f, "{}", b),
             Literal::Char(c) => write!(f, "'{}'", c),
             Literal::Str(s) => write!(f, "\"{}\"", s),
             Literal::Unit => write!(f, "()"),
@@ -246,7 +243,7 @@ pub enum Term {
         prim_name: String,
         args: Vec<Term>,
     },
-    Constructor(String, Vec<Term>),
+    Constructor(String, Vec<Term>, Option<Type>),
     NativeLiteral(Literal),
 }
 
@@ -301,8 +298,8 @@ impl Term {
         }
     }
 
-    pub fn constructor(name: impl Into<String>, args: Vec<Term>) -> Term {
-        Term::Constructor(name.into(), args)
+    pub fn constructor(name: impl Into<String>, args: Vec<Term>, ty: Option<Type>) -> Term {
+        Term::Constructor(name.into(), args, ty)
     }
 
     pub fn literal(lit: Literal) -> Term {
@@ -350,7 +347,7 @@ impl Term {
             Term::View { arms, .. } => arms.first().and_then(|a| a.body.get_type()),
             Term::TraitMethod { .. } => None,
             Term::PrimCall { .. } => None, // Type should be determined from primitive signature
-            Term::Constructor(_, _) => None,
+            Term::Constructor(_, _, _) => None,
             Term::NativeLiteral(lit) => Some(lit.ty()),
         }
     }
@@ -424,7 +421,7 @@ impl fmt::Display for Term {
                         .join(", ")
                 )
             }
-            Term::Constructor(name, args) => {
+            Term::Constructor(name, args, _) => {
                 if args.is_empty() {
                     write!(f, "{}", name)
                 } else if args.len() == 1 {

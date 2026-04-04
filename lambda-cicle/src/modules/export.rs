@@ -207,7 +207,7 @@ impl Exports {
                 }
                 Decl::ImplDecl {
                     ty,
-                    trait_name,
+                    trait_name: _,
                     methods,
                     ..
                 } => {

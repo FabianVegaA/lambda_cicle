@@ -41,7 +41,7 @@ impl NetBuilder {
             }
             Term::Match { scrutinee, arms } => self.translate_match(scrutinee, arms),
             Term::View { scrutinee, arms } => self.translate_view(scrutinee, arms),
-            Term::Constructor(name, args) => self.translate_constructor(name, args),
+            Term::Constructor(name, args, _) => self.translate_constructor(name, args),
             Term::NativeLiteral(lit) => self.translate_literal(lit),
             Term::TraitMethod {
                 trait_name: _,
@@ -260,12 +260,6 @@ impl NetBuilder {
             }
             Literal::Float(f) => {
                 let node = Node::prim_val(PrimVal::Float(*f));
-                let id = self.net.add_node(node);
-                self.net.add_free_port(id, PortIndex(0));
-                id
-            }
-            Literal::Bool(b) => {
-                let node = Node::prim_val(PrimVal::Bool(*b));
                 let id = self.net.add_node(node);
                 self.net.add_free_port(id, PortIndex(0));
                 id

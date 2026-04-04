@@ -1,5 +1,5 @@
 use crate::core::ast::terms::Term;
-use crate::core::ast::types::{MethodName, TraitName, Type};
+use crate::core::ast::types::Type;
 use crate::traits::registry::{Registry, TraitMethodImpl};
 
 /// Desugar trait method calls into direct primitive calls when possible.
@@ -141,11 +141,12 @@ fn desugar_recursive(term: &Term, registry: &Registry) -> Term {
             }
         }
 
-        Term::Constructor(name, args) => Term::Constructor(
+        Term::Constructor(name, args, ty) => Term::Constructor(
             name.clone(),
             args.iter()
                 .map(|a| desugar_recursive(a, registry))
                 .collect(),
+            ty.clone(),
         ),
 
         Term::PrimCall { prim_name, args } => Term::PrimCall {
@@ -167,14 +168,26 @@ fn resolve_trait_method_call(
     args: &[Term],
     registry: &Registry,
 ) -> Option<TraitMethodImpl> {
-    let arg_types: Vec<Type> = args
-        .iter()
-        .filter_map(|a| get_type_of_term_with_registry(a, registry))
-        .collect();
+    let arg_types: Vec<Type> = args.iter().filter_map(|a| get_type_of_term(a)).collect();
 
-    if let Some((trait_name, for_type, method_term)) =
-        registry.find_method_by_name(method_name, &arg_types)
-    {
+    // Special case: and, or, hash are declared as val in prelude, not as trait methods
+    // They point to prim_and, prim_or, prim_bhash respectively
+    if method_name == "and" || method_name == "or" {
+        use crate::runtime::primitives::prim_name_to_op;
+        let prim_name = format!("prim_{}", method_name);
+        if let Some(_) = prim_name_to_op(&prim_name) {
+            return Some(TraitMethodImpl::Primitive(prim_name));
+        }
+    }
+
+    if method_name == "hash" {
+        use crate::runtime::primitives::prim_name_to_op;
+        if let Some(_) = prim_name_to_op("prim_bhash") {
+            return Some(TraitMethodImpl::Primitive("prim_bhash".to_string()));
+        }
+    }
+
+    if let Some((_, _, method_term)) = registry.find_method_by_name(method_name, &arg_types) {
         if let Term::Var(var_name) = &method_term {
             if var_name.starts_with("prim_") {
                 return Some(TraitMethodImpl::Primitive(var_name.clone()));
@@ -281,17 +294,8 @@ fn resolve_trait_method_impl(
     Some((method_term.clone(), arg_type))
 }
 
-/// Get the type of a term (for desugaring purposes)
-fn get_type_of_term(term: &Term) -> Option<Type> {
-    match term {
-        Term::NativeLiteral(lit) => Some(lit.ty()),
-        Term::Var(_) => None,
-        _ => term.get_type(),
-    }
-}
-
 /// Get the type of a term using the registry for PrimCall terms
-fn get_type_of_term_with_registry(term: &Term, registry: &Registry) -> Option<Type> {
+fn get_type_of_term(term: &Term) -> Option<Type> {
     match term {
         Term::NativeLiteral(lit) => Some(lit.ty()),
         Term::Var(_) => None,

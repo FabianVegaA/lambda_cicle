@@ -1,4 +1,4 @@
-use crate::core::ast::{Decl, UseMode, Visibility};
+use crate::core::ast::{Decl, UseMode};
 use crate::modules::Exports;
 use std::collections::{HashMap, HashSet, VecDeque};
 
@@ -296,6 +296,8 @@ pub fn resolve_selective_import(
 
 #[cfg(test)]
 mod tests {
+    use crate::Visibility;
+
     use super::*;
 
     #[test]

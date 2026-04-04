@@ -2,26 +2,24 @@
 -- Layer 1 (depends on Prelude only)
 -- Design: §16.4
 
-use Std.Prelude
+pub type String (..)
 
-pub type String
+-- pub val empty : String
+-- pub val from_chars : List Char -> String
 
-pub val empty : String
-pub val from_chars : List Char -> String
+-- pub val length : &String -> Int
+-- pub val is_empty : &String -> Bool
+-- pub val chars : &String -> List Char
 
-pub val length : &String -> Int
-pub val is_empty : &String -> Bool
-pub val chars : &String -> List Char
+-- pub val append : String -> String -> String
+-- pub val slice : &String -> Int -> Int -> &String
+-- pub val to_upper : String -> String
+-- pub val to_lower : String -> String
 
-pub val append : String -> String -> String
-pub val slice : &String -> Int -> Int -> &String
-pub val to_upper : String -> String
-pub val to_lower : String -> String
-
-pub val contains : &String -> &String -> Bool
-pub val starts_with : &String -> &String -> Bool
-pub val ends_with : &String -> &String -> Bool
-pub val split : &String -> Char -> List &String
+-- pub val contains : &String -> &String -> Bool
+-- pub val starts_with : &String -> &String -> Bool
+-- pub val ends_with : &String -> &String -> Bool
+-- pub val split : &String -> Char -> List &String
 
 impl Eq for String with eq = prim_ceq
 impl Ord for String with compare = prim_cord

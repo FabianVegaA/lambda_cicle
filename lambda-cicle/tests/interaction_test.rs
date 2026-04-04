@@ -1,4 +1,4 @@
-use lambda_cicle::runtime::net::{Agent, InteractionResult, Net, Node, NodeId, PortIndex};
+use lambda_cicle::runtime::net::{Agent, InteractionResult, Net, Node, PortIndex};
 use lambda_cicle::runtime::primitives::{PrimOp, PrimVal};
 
 fn create_prim_iadd_net() -> Net {
@@ -33,20 +33,6 @@ fn create_prim_ineg_net() -> Net {
     net.connect(prim_id, PortIndex(1), val_id, PortIndex(0));
 
     net.add_free_port(prim_id, PortIndex(0));
-
-    net
-}
-
-fn create_primval_epsilon_net() -> Net {
-    let mut net = Net::new();
-
-    let val = Node::prim_val(PrimVal::Int(42));
-    let val_id = net.add_node(val);
-
-    let epsilon = Node::epsilon();
-    let epsilon_id = net.add_node(epsilon);
-
-    net.connect(val_id, PortIndex(0), epsilon_id, PortIndex(0));
 
     net
 }

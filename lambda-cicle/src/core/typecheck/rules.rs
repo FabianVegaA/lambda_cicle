@@ -4,7 +4,7 @@ use crate::core::borrow::BorrowChecker;
 use crate::core::multiplicity::semiring::Quantity;
 use crate::core::typecheck::{TypeContext, TypeError};
 
-pub fn type_check(term: &Term, ctx: &TypeContext) -> Result<(Type, TypeContext), TypeError> {
+pub fn type_check(term: &Term, ctx: &TypeContext) -> Result<(Type, TypeContext, Term), TypeError> {
     match term {
         Term::Var(name) => match ctx.get(name) {
             Some((mult, ty)) => {
@@ -13,7 +13,7 @@ pub fn type_check(term: &Term, ctx: &TypeContext) -> Result<(Type, TypeContext),
                     Multiplicity::Borrow => Type::borrow(ty.clone()),
                     Multiplicity::Zero => ty.clone(),
                 };
-                Ok((result_ty, ctx.clone()))
+                Ok((result_ty, ctx.clone(), term.clone()))
             }
             None => {
                 // Check if this might be a trait method call
@@ -41,13 +41,13 @@ pub fn type_check(term: &Term, ctx: &TypeContext) -> Result<(Type, TypeContext),
             body,
         } => {
             let body_ctx = ctx.extend(var.clone(), multiplicity.clone(), annot.clone());
-            let (body_ty, _) = type_check(body, &body_ctx)?;
+            let (body_ty, _, _) = type_check(body, &body_ctx)?;
             let result_ty = Type::arrow(annot.clone(), multiplicity.clone(), body_ty);
-            Ok((result_ty, ctx.clone()))
+            Ok((result_ty, ctx.clone(), term.clone()))
         }
         Term::App { fun, arg } => {
-            let (fun_ty, ctx1) = type_check(fun, ctx)?;
-            let (arg_ty, ctx2) = type_check(arg, &ctx1)?;
+            let (fun_ty, ctx1, _) = type_check(fun, ctx)?;
+            let (arg_ty, ctx2, _) = type_check(arg, &ctx1)?;
 
             match fun_ty {
                 Type::Arrow(mult, arg_ty_expected, ret_ty) => {
@@ -61,7 +61,7 @@ pub fn type_check(term: &Term, ctx: &TypeContext) -> Result<(Type, TypeContext),
                         Multiplicity::One | Multiplicity::Omega | Multiplicity::Zero => {
                             let combined_ctx =
                                 ctx1.add(&ctx2).map_err(|_e| TypeError::BorrowContextMix)?;
-                            Ok((*ret_ty, combined_ctx))
+                            Ok((*ret_ty, combined_ctx, term.clone()))
                         }
                         Multiplicity::Borrow => Err(TypeError::MultiplicityMismatch {
                             expected: Multiplicity::One,
@@ -97,7 +97,7 @@ pub fn type_check(term: &Term, ctx: &TypeContext) -> Result<(Type, TypeContext),
             // Lean4 spec: HasType (Context.scale q Γ₁) e₁ τ₁
             // Scale the outer context by q for checking the value
             let scaled_ctx = ctx.scale(q).map_err(|_e| TypeError::BorrowContextMix)?;
-            let (val_ty, ctx1) = type_check(value, &scaled_ctx)?;
+            let (val_ty, ctx1, _) = type_check(value, &scaled_ctx)?;
 
             // If annotation is a type variable, don't require equality - allow inference
             // Otherwise, check that value type matches annotation
@@ -112,23 +112,23 @@ pub fn type_check(term: &Term, ctx: &TypeContext) -> Result<(Type, TypeContext),
             // Lean4 spec: HasType (Context.add Γ₂ {name:=x, mult:=q, type:=τ₁}) e₂ τ₂
             // Extend ctx1 (context after value) with the binding
             let body_ctx = ctx1.extend(var.clone(), multiplicity.clone(), annot.clone());
-            let (body_ty, ctx2) = type_check(body, &body_ctx)?;
+            let (body_ty, ctx2, _) = type_check(body, &body_ctx)?;
 
             // Lean4 spec: HasType (Context.addCtx Γ₁ Γ₂) (Term.letTerm ...) τ₂
             // Final context is outer context (Γ₁) + context after body (Γ₂)
             let final_ctx = ctx.add(&ctx2).map_err(|_e| TypeError::BorrowContextMix)?;
 
-            Ok((body_ty, final_ctx))
+            Ok((body_ty, final_ctx, term.clone()))
         }
         Term::Match { scrutinee, arms } => {
-            let (_, ctx1) = type_check(scrutinee, ctx)?;
+            let (_, ctx1, _) = type_check(scrutinee, ctx)?;
 
             let mut arm_types = Vec::new();
             let mut final_ctx = ctx1.clone();
 
             for arm in arms {
                 let arm_ctx = extend_with_pattern(&ctx1, &arm.pattern)?;
-                let (arm_ty, arm_ctx_after) = type_check(&arm.body, &arm_ctx)?;
+                let (arm_ty, arm_ctx_after, _) = type_check(&arm.body, &arm_ctx)?;
                 arm_types.push(arm_ty);
 
                 final_ctx = final_ctx
@@ -150,17 +150,17 @@ pub fn type_check(term: &Term, ctx: &TypeContext) -> Result<(Type, TypeContext),
                 }
             }
 
-            Ok((first.clone(), final_ctx))
+            Ok((first.clone(), final_ctx, term.clone()))
         }
         Term::View { scrutinee, arms } => {
-            let (_, ctx1) = type_check(scrutinee, ctx)?;
+            let (_, ctx1, _) = type_check(scrutinee, ctx)?;
 
             let mut arm_types = Vec::new();
             let mut final_ctx = ctx1.clone();
 
             for arm in arms {
                 let arm_ctx = extend_with_pattern_as_borrow(&ctx1, &arm.pattern)?;
-                let (arm_ty, arm_ctx_after) = type_check(&arm.body, &arm_ctx)?;
+                let (arm_ty, arm_ctx_after, _) = type_check(&arm.body, &arm_ctx)?;
                 arm_types.push(arm_ty);
 
                 final_ctx = final_ctx
@@ -182,19 +182,22 @@ pub fn type_check(term: &Term, ctx: &TypeContext) -> Result<(Type, TypeContext),
                 }
             }
 
-            Ok((first.clone(), final_ctx))
+            Ok((first.clone(), final_ctx, term.clone()))
         }
         Term::TraitMethod {
             trait_name,
             method: _,
             arg,
         } => {
-            let (arg_ty, _) = type_check(arg, ctx)?;
+            let (arg_ty, _, _) = type_check(arg, ctx)?;
             Err(TypeError::TraitNotFound(trait_name.clone(), arg_ty))
         }
-        Term::Constructor(name, args) => {
+        Term::Constructor(name, args, ty) => {
             let constructor_info = ctx.get_constructor(name).ok_or_else(|| {
-                TypeError::InvalidApplication(format!("Unknown constructor: {}", name))
+                TypeError::InvalidApplication(format!(
+                    "Unknown constructor: {} for type {:?}",
+                    name, ty
+                ))
             })?;
 
             if args.len() != constructor_info.field_types.len() {
@@ -208,7 +211,7 @@ pub fn type_check(term: &Term, ctx: &TypeContext) -> Result<(Type, TypeContext),
 
             let mut ctx = ctx.clone();
             for (arg, expected_ty) in args.iter().zip(&constructor_info.field_types) {
-                let (arg_ty, new_ctx) = type_check(arg, &ctx)?;
+                let (arg_ty, new_ctx, _) = type_check(arg, &ctx)?;
                 if arg_ty != *expected_ty {
                     return Err(TypeError::InvalidApplication(format!(
                         "Type mismatch in constructor {}: expected {:?}, got {:?}",
@@ -218,9 +221,29 @@ pub fn type_check(term: &Term, ctx: &TypeContext) -> Result<(Type, TypeContext),
                 ctx = new_ctx;
             }
 
-            Ok((constructor_info.result_type.clone(), ctx))
+            let mut typed_args = Vec::new();
+            let mut ctx = ctx.clone();
+            for (arg, expected_ty) in args.iter().zip(&constructor_info.field_types) {
+                let (arg_ty, new_ctx, typed_arg) = type_check(arg, &ctx)?;
+                if arg_ty != *expected_ty {
+                    return Err(TypeError::InvalidApplication(format!(
+                        "Type mismatch in constructor {}: expected {:?}, got {:?}",
+                        name, expected_ty, arg_ty
+                    )));
+                }
+                typed_args.push(typed_arg);
+                ctx = new_ctx;
+            }
+
+            let typed_term = Term::Constructor(
+                name.clone(),
+                typed_args,
+                Some(constructor_info.result_type.clone()),
+            );
+
+            Ok((constructor_info.result_type.clone(), ctx, typed_term))
         }
-        Term::NativeLiteral(lit) => Ok((lit.ty(), ctx.clone())),
+        Term::NativeLiteral(lit) => Ok((lit.ty(), ctx.clone(), term.clone())),
         Term::PrimCall { prim_name, args } => {
             let prim_ty = ctx
                 .get(prim_name)
@@ -232,7 +255,7 @@ pub fn type_check(term: &Term, ctx: &TypeContext) -> Result<(Type, TypeContext),
             let mut remaining_ty = prim_ty;
 
             for arg in args {
-                let (arg_ty, new_ctx) = type_check(arg, &current_ctx)?;
+                let (arg_ty, new_ctx, _) = type_check(arg, &current_ctx)?;
                 current_ctx = new_ctx;
 
                 match remaining_ty {
@@ -254,7 +277,7 @@ pub fn type_check(term: &Term, ctx: &TypeContext) -> Result<(Type, TypeContext),
                 }
             }
 
-            Ok((remaining_ty, current_ctx))
+            Ok((remaining_ty, current_ctx, term.clone()))
         }
     }
 }
@@ -455,7 +478,7 @@ fn check_negative_occurrence(ty: &Type, type_param: &str) -> Result<(), TypeErro
 
 pub fn type_check_with_borrow_check(term: &Term) -> Result<Type, TypeError> {
     let ctx = TypeContext::new();
-    let (ty, _) = type_check(term, &ctx)?;
+    let (ty, _, _) = type_check(term, &ctx)?;
 
     let mut checker = BorrowChecker::new();
     checker.check(term)?;

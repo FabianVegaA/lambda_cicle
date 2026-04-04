@@ -10,7 +10,6 @@ struct ArbitraryF64(f64);
 
 impl Arbitrary for ArbitraryF64 {
     fn arbitrary(g: &mut Gen) -> Self {
-        let size = g.size();
         let bits = u64::arbitrary(g);
         let f = f64::from_bits(bits);
         if !f.is_finite() {
@@ -26,8 +25,8 @@ fn eval_int_literal(_dummy: u8) -> bool {
     let mut net = translate(&term);
     let evaluator = SequentialEvaluator::new();
     match evaluator.evaluate(&mut net) {
-        Ok(Some(Term::NativeLiteral(Literal::Int(n)))) => n == 42,
-        Ok(Some(Term::NativeLiteral(Literal::Unit))) => true,
+        Ok(Term::NativeLiteral(Literal::Int(n))) => n == 42,
+        Ok(Term::NativeLiteral(Literal::Unit)) => true,
         _ => false,
     }
 }
@@ -45,7 +44,7 @@ fn eval_identity_application(_dummy: u8) -> bool {
     let mut net = translate(&term);
     let evaluator = SequentialEvaluator::new();
     match evaluator.evaluate(&mut net) {
-        Ok(Some(Term::NativeLiteral(Literal::Int(n)))) => n == 5,
+        Ok(Term::NativeLiteral(Literal::Int(n))) => n == 5,
         _ => false,
     }
 }
@@ -71,7 +70,7 @@ fn eval_nested_identity(_dummy: u8) -> bool {
     let mut net = translate(&term);
     let evaluator = SequentialEvaluator::new();
     match evaluator.evaluate(&mut net) {
-        Ok(Some(Term::NativeLiteral(Literal::Int(n)))) => n == 3,
+        Ok(Term::NativeLiteral(Literal::Int(n))) => n == 3,
         _ => false,
     }
 }
@@ -87,17 +86,7 @@ fn eval_let_binding(_dummy: u8) -> bool {
     let mut net = translate(&term);
     let evaluator = SequentialEvaluator::new();
     match evaluator.evaluate(&mut net) {
-        Ok(Some(Term::NativeLiteral(Literal::Int(n)))) => n == 10,
-        _ => false,
-    }
-}
-
-fn eval_bool_literal(_dummy: u8) -> bool {
-    let term = Term::NativeLiteral(Literal::Bool(true));
-    let mut net = translate(&term);
-    let evaluator = SequentialEvaluator::new();
-    match evaluator.evaluate(&mut net) {
-        Ok(Some(Term::NativeLiteral(Literal::Bool(b)))) => b == true,
+        Ok(Term::NativeLiteral(Literal::Int(n))) => n == 10,
         _ => false,
     }
 }
@@ -107,7 +96,7 @@ fn eval_unit_literal(_dummy: u8) -> bool {
     let mut net = translate(&term);
     let evaluator = SequentialEvaluator::new();
     match evaluator.evaluate(&mut net) {
-        Ok(Some(Term::NativeLiteral(Literal::Unit))) => true,
+        Ok(Term::NativeLiteral(Literal::Unit)) => true,
         _ => false,
     }
 }
@@ -129,7 +118,7 @@ fn eval_add_constant(_dummy: u8) -> bool {
     let mut net = translate(&term);
     let evaluator = SequentialEvaluator::new();
     match evaluator.evaluate(&mut net) {
-        Ok(Some(Term::NativeLiteral(Literal::Int(n)))) => n == 1,
+        Ok(Term::NativeLiteral(Literal::Int(n))) => n == 1,
         _ => false,
     }
 }
@@ -178,11 +167,6 @@ fn qc_eval_let_binding() {
 }
 
 #[test]
-fn qc_eval_bool_literal() {
-    quickcheck(eval_bool_literal as fn(u8) -> bool);
-}
-
-#[test]
 fn qc_eval_unit_literal() {
     quickcheck(eval_unit_literal as fn(u8) -> bool);
 }
@@ -202,19 +186,8 @@ fn eval_int_roundtrip(input: i64) -> bool {
     let mut net = translate(&term);
     let evaluator = SequentialEvaluator::new();
     match evaluator.evaluate(&mut net) {
-        Ok(Some(Term::NativeLiteral(Literal::Int(n)))) => n == input,
-        Ok(Some(Term::NativeLiteral(Literal::Unit))) => true,
-        _ => false,
-    }
-}
-
-fn eval_bool_roundtrip(input: bool) -> bool {
-    let term = Term::NativeLiteral(Literal::Bool(input));
-    let mut net = translate(&term);
-    let evaluator = SequentialEvaluator::new();
-    match evaluator.evaluate(&mut net) {
-        Ok(Some(Term::NativeLiteral(Literal::Bool(b)))) => b == input,
-        Ok(Some(Term::NativeLiteral(Literal::Unit))) => true,
+        Ok(Term::NativeLiteral(Literal::Int(n))) => n == input,
+        Ok(Term::NativeLiteral(Literal::Unit)) => true,
         _ => false,
     }
 }
@@ -225,8 +198,8 @@ fn eval_float_roundtrip(input: ArbitraryF64) -> bool {
     let mut net = translate(&term);
     let evaluator = SequentialEvaluator::new();
     match evaluator.evaluate(&mut net) {
-        Ok(Some(Term::NativeLiteral(Literal::Float(f)))) => (f - input).abs() < f64::EPSILON,
-        Ok(Some(Term::NativeLiteral(Literal::Unit))) => true,
+        Ok(Term::NativeLiteral(Literal::Float(f))) => (f - input).abs() < f64::EPSILON,
+        Ok(Term::NativeLiteral(Literal::Unit)) => true,
         _ => false,
     }
 }
@@ -236,8 +209,8 @@ fn eval_char_roundtrip(input: char) -> bool {
     let mut net = translate(&term);
     let evaluator = SequentialEvaluator::new();
     match evaluator.evaluate(&mut net) {
-        Ok(Some(Term::NativeLiteral(Literal::Char(c)))) => c == input,
-        Ok(Some(Term::NativeLiteral(Literal::Unit))) => true,
+        Ok(Term::NativeLiteral(Literal::Char(c))) => c == input,
+        Ok(Term::NativeLiteral(Literal::Unit)) => true,
         _ => false,
     }
 }
@@ -245,11 +218,6 @@ fn eval_char_roundtrip(input: char) -> bool {
 #[test]
 fn qc_eval_int_roundtrip() {
     quickcheck(eval_int_roundtrip as fn(i64) -> bool);
-}
-
-#[test]
-fn qc_eval_bool_roundtrip() {
-    quickcheck(eval_bool_roundtrip as fn(bool) -> bool);
 }
 
 #[test]

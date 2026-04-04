@@ -99,42 +99,6 @@ impl TypeContext {
         self.bindings
             .insert("prim_ihash".to_string(), (Multiplicity::Omega, int_hash_ty));
 
-        // Bool primitives (Bool is an ADT type, not native)
-        let bool_ty = Type::inductive("Bool".to_string(), vec![]);
-
-        let bool_binop_ty = Type::arrow(
-            bool_ty.clone(),
-            Multiplicity::One,
-            Type::arrow(bool_ty.clone(), Multiplicity::One, bool_ty.clone()),
-        );
-
-        self.bindings.insert(
-            "prim_and".to_string(),
-            (Multiplicity::Omega, bool_binop_ty.clone()),
-        );
-        self.bindings.insert(
-            "prim_or".to_string(),
-            (Multiplicity::Omega, bool_binop_ty.clone()),
-        );
-
-        let bool_unary_ty = Type::arrow(bool_ty.clone(), Multiplicity::One, bool_ty.clone());
-        self.bindings
-            .insert("prim_not".to_string(), (Multiplicity::Omega, bool_unary_ty));
-
-        let bool_cmp_ty = Type::arrow(
-            bool_ty.clone(),
-            Multiplicity::One,
-            Type::arrow(bool_ty.clone(), Multiplicity::One, bool_ty.clone()),
-        );
-        self.bindings
-            .insert("prim_beq".to_string(), (Multiplicity::Omega, bool_cmp_ty));
-
-        let bool_hash_ty = Type::arrow(bool_ty.clone(), Multiplicity::One, Type::int());
-        self.bindings.insert(
-            "prim_bhash".to_string(),
-            (Multiplicity::Omega, bool_hash_ty),
-        );
-
         // Float primitives
         let float_binop_ty = Type::arrow(
             Type::float(),
@@ -199,6 +163,25 @@ impl TypeContext {
         self.bindings.insert(
             "prim_chash".to_string(),
             (Multiplicity::Omega, char_hash_ty),
+        );
+
+        // Register Bool constructors
+        let bool_ty = Type::inductive("Bool".to_string(), vec![]);
+        self.constructors.insert(
+            "True".to_string(),
+            ConstructorInfo {
+                type_name: "Bool".to_string(),
+                field_types: vec![],
+                result_type: bool_ty.clone(),
+            },
+        );
+        self.constructors.insert(
+            "False".to_string(),
+            ConstructorInfo {
+                type_name: "Bool".to_string(),
+                field_types: vec![],
+                result_type: bool_ty,
+            },
         );
     }
 

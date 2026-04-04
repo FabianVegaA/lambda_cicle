@@ -27,19 +27,11 @@ pub enum PrimOp {
     FGe,
     FLt,
     FLe,
-    Not,
-    BNot,
-    And,
-    BAnd,
-    Or,
-    BOr,
     Chr,
     Ord,
     CEq,
     COrd,
     CHash,
-    BEq,
-    BHash,
     IntToString,
     FloatToString,
     CharToString,
@@ -50,16 +42,12 @@ impl PrimOp {
         match self {
             PrimOp::INeg
             | PrimOp::FNeg
-            | PrimOp::Not
-            | PrimOp::BNot
             | PrimOp::Chr
             | PrimOp::Ord
             | PrimOp::IHash
             | PrimOp::CEq
             | PrimOp::COrd
             | PrimOp::CHash
-            | PrimOp::BEq
-            | PrimOp::BHash
             | PrimOp::IntToString
             | PrimOp::FloatToString
             | PrimOp::CharToString => 1,
@@ -277,29 +265,6 @@ impl PrimOp {
                 }
                 None
             }
-            PrimOp::Not => {
-                let a = args.first()?;
-                if let PrimVal::Bool(b) = a {
-                    return Some(PrimVal::Bool(!b));
-                }
-                None
-            }
-            PrimOp::And => {
-                let a = args.first()?;
-                let b = args.get(1)?;
-                if let (PrimVal::Bool(x), PrimVal::Bool(y)) = (a, b) {
-                    return Some(PrimVal::Bool(*x && *y));
-                }
-                None
-            }
-            PrimOp::Or => {
-                let a = args.first()?;
-                let b = args.get(1)?;
-                if let (PrimVal::Bool(x), PrimVal::Bool(y)) = (a, b) {
-                    return Some(PrimVal::Bool(*x || *y));
-                }
-                None
-            }
             PrimOp::Chr => {
                 let a = args.first()?;
                 if let PrimVal::Int(n) = a {
@@ -361,29 +326,6 @@ impl PrimOp {
                 }
                 None
             }
-            PrimOp::BNot => {
-                let a = args.first()?;
-                if let PrimVal::Bool(b) = a {
-                    return Some(PrimVal::Bool(!*b));
-                }
-                None
-            }
-            PrimOp::BAnd => {
-                let a = args.first()?;
-                let b = args.get(1)?;
-                if let (PrimVal::Bool(x), PrimVal::Bool(y)) = (a, b) {
-                    return Some(PrimVal::Bool(*x && *y));
-                }
-                None
-            }
-            PrimOp::BOr => {
-                let a = args.first()?;
-                let b = args.get(1)?;
-                if let (PrimVal::Bool(x), PrimVal::Bool(y)) = (a, b) {
-                    return Some(PrimVal::Bool(*x || *y));
-                }
-                None
-            }
             PrimOp::CEq => {
                 let a = args.first()?;
                 let b = args.get(1)?;
@@ -410,21 +352,6 @@ impl PrimOp {
                 let a = args.first()?;
                 if let PrimVal::Char(c) = a {
                     return Some(PrimVal::Int(*c as i64));
-                }
-                None
-            }
-            PrimOp::BEq => {
-                let a = args.first()?;
-                let b = args.get(1)?;
-                if let (PrimVal::Bool(x), PrimVal::Bool(y)) = (a, b) {
-                    return Some(PrimVal::Bool(x == y));
-                }
-                None
-            }
-            PrimOp::BHash => {
-                let a = args.first()?;
-                if let PrimVal::Bool(b) = a {
-                    return Some(PrimVal::Int(if *b { 1 } else { 0 }));
                 }
                 None
             }
@@ -459,19 +386,11 @@ pub fn prim_name_to_op(name: &str) -> Option<PrimOp> {
         "prim_fge" => Some(PrimOp::FGe),
         "prim_flt" => Some(PrimOp::FLt),
         "prim_fle" => Some(PrimOp::FLe),
-        "prim_not" => Some(PrimOp::Not),
-        "prim_and" => Some(PrimOp::And),
-        "prim_or" => Some(PrimOp::Or),
-        "prim_bnot" => Some(PrimOp::BNot),
-        "prim_band" => Some(PrimOp::BAnd),
-        "prim_bor" => Some(PrimOp::BOr),
         "prim_chr" => Some(PrimOp::Chr),
         "prim_ord" => Some(PrimOp::Ord),
         "prim_ceq" => Some(PrimOp::CEq),
         "prim_cord" => Some(PrimOp::COrd),
         "prim_chash" => Some(PrimOp::CHash),
-        "prim_beq" => Some(PrimOp::BEq),
-        "prim_bhash" => Some(PrimOp::BHash),
         "prim_int_to_string" => Some(PrimOp::IntToString),
         "prim_float_to_string" => Some(PrimOp::FloatToString),
         "prim_char_to_string" => Some(PrimOp::CharToString),

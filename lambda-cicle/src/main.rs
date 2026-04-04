@@ -117,7 +117,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let decls_result = parse_program(&source);
 
             let term: Term;
-            let ty: lambda_cicle::Type;
 
             if let Ok(mut decls) = decls_result {
                 // Inject prelude if not opted out
@@ -142,7 +141,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         // Desugar trait method calls to primitive calls first
                         let desugared_term = desugar_term(&elaborated_term, &registry);
                         // Then type check the desugared term
-                        let ty = type_check_with_borrow_check(&desugared_term)?;
+                        type_check_with_borrow_check(&desugared_term)?;
                         term = desugared_term;
                     }
                     Err(e) => {
@@ -150,13 +149,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         eprintln!("Falling back to expression parsing...");
                         // Fall back to parsing as expression
                         term = parse(&source)?;
-                        ty = type_check_with_borrow_check(&term)?;
+                        type_check_with_borrow_check(&term)?;
                     }
                 }
             } else {
                 // Fall back to parsing as expression
                 term = parse(&source)?;
-                ty = type_check_with_borrow_check(&term)?;
+                type_check_with_borrow_check(&term)?;
 
                 if grammar {
                     println!("{:#?}", term);
@@ -169,9 +168,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let evaluator = SequentialEvaluator::new();
             match evaluator.evaluate(&mut net) {
                 Ok(result) => {
-                    if let Some(term) = result {
-                        println!("{}", term);
-                    }
+                    println!("{}", result);
                 }
                 Err(e) => {
                     eprintln!("Error: {:?}", e);

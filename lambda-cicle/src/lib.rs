@@ -28,7 +28,7 @@ pub enum PipelineError {
     Module(ModuleError),
 }
 
-pub fn run_full(source: &str, debug_level: u8) -> Result<Option<Term>, PipelineError> {
+pub fn run_full(source: &str) -> Result<Term, PipelineError> {
     let decls_result = parse_program(source);
 
     let mut decls = decls_result.map_err(PipelineError::Parse)?;
@@ -48,12 +48,10 @@ pub fn run_full(source: &str, debug_level: u8) -> Result<Option<Term>, PipelineE
     let mut net = translate(&desugared_term);
 
     let evaluator = SequentialEvaluator::new();
-    evaluator
-        .evaluate_with_debug(&mut net, debug_level)
-        .map_err(PipelineError::Eval)
+    evaluator.evaluate(&mut net).map_err(PipelineError::Eval)
 }
 
-pub fn run_parallel(source: &str) -> Result<Option<Term>, PipelineError> {
+pub fn run_parallel(source: &str) -> Result<Term, PipelineError> {
     let term = parse(source).map_err(PipelineError::Parse)?;
     let _ty = type_check_with_borrow_check(&term).map_err(PipelineError::Typecheck)?;
     let mut net = translate(&term);

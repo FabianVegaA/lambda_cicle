@@ -5,8 +5,6 @@ pub enum Token {
     KwMatch(usize, usize),
     KwView(usize, usize),
     KwWith(usize, usize),
-    KwTrue(usize, usize),
-    KwFalse(usize, usize),
     KwForall(usize, usize),
     KwUnit(usize, usize),
     KwLambda(usize, usize),
@@ -41,7 +39,6 @@ pub enum Token {
     Underscore(usize, usize),
     IntLit(i64, usize, usize),
     FloatLit(f64, usize, usize),
-    BoolLit(bool, usize, usize),
     CharLit(char, usize, usize),
     StringLit(String, usize, usize),
     UnitLit(usize, usize),
@@ -57,8 +54,6 @@ impl Token {
             | Token::KwMatch(l, c)
             | Token::KwView(l, c)
             | Token::KwWith(l, c)
-            | Token::KwTrue(l, c)
-            | Token::KwFalse(l, c)
             | Token::KwForall(l, c)
             | Token::KwUnit(l, c)
             | Token::KwLambda(l, c)
@@ -95,7 +90,6 @@ impl Token {
             | Token::EOF(l, c) => Some((*l, *c)),
             Token::IntLit(_, l, c)
             | Token::FloatLit(_, l, c)
-            | Token::BoolLit(_, l, c)
             | Token::CharLit(_, l, c)
             | Token::StringLit(_, l, c)
             | Token::Ident(_, l, c) => Some((*l, *c)),
@@ -398,8 +392,6 @@ impl Lexer {
             "match" => Token::KwMatch(self.line, self.col),
             "view" => Token::KwView(self.line, self.col),
             "with" => Token::KwWith(self.line, self.col),
-            "true" => Token::BoolLit(true, self.line, self.col),
-            "false" => Token::BoolLit(false, self.line, self.col),
             "forall" => Token::KwForall(self.line, self.col),
             "Unit" => Token::KwUnit(self.line, self.col),
             "lambda" => Token::KwLambda(self.line, self.col),

@@ -1,5 +1,6 @@
 use super::{verify_s5_prime, EvalError, Evaluator};
 use crate::core::ast::{Literal, Term};
+use crate::runtime::evaluator::sequential::ExtractionError;
 use crate::runtime::net::{Agent, Net, NodeId, PortIndex};
 use crossbeam::queue::SegQueue;
 use parking_lot::Mutex;
@@ -37,7 +38,7 @@ impl Default for ParallelEvaluator {
 }
 
 impl Evaluator for ParallelEvaluator {
-    fn evaluate(&self, net: &mut Net) -> Result<Option<Term>, EvalError> {
+    fn evaluate(&self, net: &mut Net) -> Result<Term, EvalError> {
         verify_s5_prime(net)?;
 
         let net = Arc::new(Mutex::new(std::mem::take(net)));
@@ -78,7 +79,7 @@ impl Evaluator for ParallelEvaluator {
             .map(|m| m.into_inner())
             .unwrap_or_else(|_| Net::new());
 
-        Ok(result)
+        result.map_err(|err| EvalError::EvaluationError(format!("{:?}", err)))
     }
 }
 
@@ -172,9 +173,9 @@ fn find_parallel_subgraphs(net: &Net) -> Vec<(NodeId, NodeId)> {
     subgraphs
 }
 
-fn extract_result(net: &Net) -> Option<Term> {
+fn extract_result(net: &Net) -> Result<Term, ExtractionError> {
     if net.nodes().is_empty() && net.wires().is_empty() {
-        return Some(Term::NativeLiteral(Literal::Unit));
+        return Ok(Term::NativeLiteral(Literal::Unit));
     }
 
     for (id, node) in net.nodes().iter().enumerate() {
@@ -192,10 +193,10 @@ fn extract_result(net: &Net) -> Option<Term> {
             if !has_free_ports && node.num_ports() == 0 {
                 match &node.agent {
                     Agent::Constructor(name) => {
-                        return Some(Term::Var(name.clone()));
+                        return Ok(Term::Var(name.clone()));
                     }
                     Agent::Prim(_) => {
-                        return Some(Term::NativeLiteral(Literal::Unit));
+                        return Ok(Term::NativeLiteral(Literal::Unit));
                     }
                     _ => {}
                 }
@@ -203,7 +204,7 @@ fn extract_result(net: &Net) -> Option<Term> {
         }
     }
 
-    None
+    Err(ExtractionError::NoResult)
 }
 
 #[derive(Debug, Clone)]

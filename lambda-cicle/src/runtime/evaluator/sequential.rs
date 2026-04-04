@@ -1,7 +1,14 @@
 use super::{EvalError, Evaluator};
 use crate::core::ast::{Literal, Term};
-use crate::runtime::net::{Agent, InteractionResult, Net, Node, NodeId, PortIndex};
+use crate::runtime::net::{Agent, InteractionResult, Net, NodeId, PortIndex};
 use crate::runtime::primitives::PrimVal;
+use crate::runtime::Node;
+
+#[derive(Debug)]
+pub enum ExtractionError {
+    UnsupportedPrimitiveValue(Agent),
+    NoResult,
+}
 
 pub struct SequentialEvaluator {
     max_steps: usize,
@@ -18,11 +25,7 @@ impl SequentialEvaluator {
         SequentialEvaluator { max_steps }
     }
 
-    pub fn evaluate_with_debug(
-        &self,
-        net: &mut Net,
-        debug_level: u8,
-    ) -> Result<Option<Term>, EvalError> {
+    pub fn evaluate_with_debug(&self, net: &mut Net, debug_level: u8) -> Result<Term, EvalError> {
         wire_io_entry_point(net);
 
         let mut steps = 0;
@@ -42,8 +45,7 @@ impl SequentialEvaluator {
             return Err(EvalError::NonTerminating);
         }
 
-        let result = extract_result(net);
-        Ok(result)
+        extract_result(net).map_err(|err| EvalError::EvaluationError(format!("{:?}", err)))
     }
 }
 
@@ -86,7 +88,7 @@ impl Default for SequentialEvaluator {
 }
 
 impl Evaluator for SequentialEvaluator {
-    fn evaluate(&self, net: &mut Net) -> Result<Option<Term>, EvalError> {
+    fn evaluate(&self, net: &mut Net) -> Result<Term, EvalError> {
         wire_io_entry_point(net);
 
         let mut steps = 0;
@@ -104,8 +106,7 @@ impl Evaluator for SequentialEvaluator {
             return Err(EvalError::NonTerminating);
         }
 
-        let result = extract_result(net);
-        Ok(result)
+        extract_result(net).map_err(|err| EvalError::EvaluationError(format!("{:?}", err)))
     }
 }
 
@@ -130,9 +131,9 @@ fn wire_io_entry_point(net: &mut Net) {
     net.connect(token_id, PortIndex(0), primio_id, PortIndex(1));
 }
 
-fn extract_result(net: &Net) -> Option<Term> {
+fn extract_result(net: &Net) -> Result<Term, ExtractionError> {
     if net.nodes().is_empty() && net.wires().is_empty() {
-        return Some(Term::NativeLiteral(Literal::Unit));
+        return Ok(Term::NativeLiteral(Literal::Unit));
     }
 
     for (_node_id, node) in net.nodes().iter().enumerate() {
@@ -142,52 +143,57 @@ fn extract_result(net: &Net) -> Option<Term> {
                     .iter()
                     .filter_map(|arg| prim_val_to_term(arg))
                     .collect();
-                return Some(Term::Constructor(name.clone(), term_args));
+                return Ok(Term::Constructor(name.clone(), term_args, None));
             }
             Agent::PrimVal(PrimVal::Int(n)) => {
-                return Some(Term::NativeLiteral(Literal::Int(*n)));
+                return Ok(Term::NativeLiteral(Literal::Int(*n)));
             }
             Agent::PrimVal(PrimVal::Float(f)) => {
-                return Some(Term::NativeLiteral(Literal::Float(*f)));
-            }
-            Agent::PrimVal(PrimVal::Bool(b)) => {
-                return Some(Term::NativeLiteral(Literal::Bool(*b)));
+                return Ok(Term::NativeLiteral(Literal::Float(*f)));
             }
             Agent::PrimVal(PrimVal::Char(c)) => {
-                return Some(Term::NativeLiteral(Literal::Char(*c)));
+                return Ok(Term::NativeLiteral(Literal::Char(*c)));
+            }
+            Agent::PrimVal(PrimVal::Bool(b)) => {
+                // Bool primitives return Bool constructors (True/False)
+                return Ok(Term::Constructor(
+                    if *b {
+                        "True".to_string()
+                    } else {
+                        "False".to_string()
+                    },
+                    vec![],
+                    None,
+                ));
             }
             Agent::PrimVal(PrimVal::Unit) => {
-                return Some(Term::NativeLiteral(Literal::Unit));
+                return Ok(Term::NativeLiteral(Literal::Unit));
             }
             Agent::Constructor(name) => {
                 if name == "()" || name == "Unit" {
-                    return Some(Term::NativeLiteral(Literal::Unit));
+                    return Ok(Term::NativeLiteral(Literal::Unit));
                 }
                 if let Ok(n) = name.parse::<i64>() {
-                    return Some(Term::NativeLiteral(Literal::Int(n)));
-                }
-                if let Ok(b) = name.parse::<bool>() {
-                    return Some(Term::NativeLiteral(Literal::Bool(b)));
+                    return Ok(Term::NativeLiteral(Literal::Int(n)));
                 }
             }
             _ => {}
         }
     }
-
-    None
+    Err(ExtractionError::NoResult)
 }
 
 fn prim_val_to_term(val: &PrimVal) -> Option<Term> {
     match val {
         PrimVal::Int(n) => Some(Term::NativeLiteral(Literal::Int(*n))),
         PrimVal::Float(f) => Some(Term::NativeLiteral(Literal::Float(*f))),
-        PrimVal::Bool(b) => Some(Term::NativeLiteral(Literal::Bool(*b))),
         PrimVal::Char(c) => Some(Term::NativeLiteral(Literal::Char(*c))),
         PrimVal::Unit => Some(Term::NativeLiteral(Literal::Unit)),
         PrimVal::String(s) => Some(Term::NativeLiteral(Literal::Str(s.clone()))),
         PrimVal::Constructor(name, args) => {
             let term_args: Vec<Term> = args.iter().filter_map(prim_val_to_term).collect();
-            Some(Term::Constructor(name.clone(), term_args))
+            Some(Term::Constructor(name.clone(), term_args, None))
         }
+        _ => None,
     }
 }

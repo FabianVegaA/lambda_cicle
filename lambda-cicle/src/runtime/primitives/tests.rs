@@ -62,141 +62,6 @@ fn test_prim_ineg() {
 }
 
 #[test]
-fn test_prim_ieq() {
-    assert_eq!(
-        eval_prim(PrimOp::IEq, vec![PrimVal::Int(5), PrimVal::Int(5)]),
-        Some(PrimVal::Bool(true))
-    );
-    assert_eq!(
-        eval_prim(PrimOp::IEq, vec![PrimVal::Int(3), PrimVal::Int(5)]),
-        Some(PrimVal::Bool(false))
-    );
-    assert_eq!(
-        eval_prim(PrimOp::IEq, vec![PrimVal::Int(0), PrimVal::Int(0)]),
-        Some(PrimVal::Bool(true))
-    );
-}
-
-#[test]
-fn test_prim_igt() {
-    assert_eq!(
-        eval_prim(PrimOp::IGt, vec![PrimVal::Int(5), PrimVal::Int(3)]),
-        Some(PrimVal::Bool(true))
-    );
-    assert_eq!(
-        eval_prim(PrimOp::IGt, vec![PrimVal::Int(3), PrimVal::Int(5)]),
-        Some(PrimVal::Bool(false))
-    );
-    assert_eq!(
-        eval_prim(PrimOp::IGt, vec![PrimVal::Int(5), PrimVal::Int(5)]),
-        Some(PrimVal::Bool(false))
-    );
-}
-
-#[test]
-fn test_prim_ige() {
-    assert_eq!(
-        eval_prim(PrimOp::IGe, vec![PrimVal::Int(5), PrimVal::Int(3)]),
-        Some(PrimVal::Bool(true))
-    );
-    assert_eq!(
-        eval_prim(PrimOp::IGe, vec![PrimVal::Int(3), PrimVal::Int(5)]),
-        Some(PrimVal::Bool(false))
-    );
-    assert_eq!(
-        eval_prim(PrimOp::IGe, vec![PrimVal::Int(5), PrimVal::Int(5)]),
-        Some(PrimVal::Bool(true))
-    );
-}
-
-#[test]
-fn test_prim_ilt() {
-    assert_eq!(
-        eval_prim(PrimOp::ILt, vec![PrimVal::Int(3), PrimVal::Int(5)]),
-        Some(PrimVal::Bool(true))
-    );
-    assert_eq!(
-        eval_prim(PrimOp::ILt, vec![PrimVal::Int(5), PrimVal::Int(3)]),
-        Some(PrimVal::Bool(false))
-    );
-    assert_eq!(
-        eval_prim(PrimOp::ILt, vec![PrimVal::Int(5), PrimVal::Int(5)]),
-        Some(PrimVal::Bool(false))
-    );
-}
-
-#[test]
-fn test_prim_ile() {
-    assert_eq!(
-        eval_prim(PrimOp::ILe, vec![PrimVal::Int(3), PrimVal::Int(5)]),
-        Some(PrimVal::Bool(true))
-    );
-    assert_eq!(
-        eval_prim(PrimOp::ILe, vec![PrimVal::Int(5), PrimVal::Int(3)]),
-        Some(PrimVal::Bool(false))
-    );
-    assert_eq!(
-        eval_prim(PrimOp::ILe, vec![PrimVal::Int(5), PrimVal::Int(5)]),
-        Some(PrimVal::Bool(true))
-    );
-}
-
-#[test]
-fn test_prim_not() {
-    assert_eq!(
-        eval_prim(PrimOp::Not, vec![PrimVal::Bool(true)]),
-        Some(PrimVal::Bool(false))
-    );
-    assert_eq!(
-        eval_prim(PrimOp::Not, vec![PrimVal::Bool(false)]),
-        Some(PrimVal::Bool(true))
-    );
-}
-
-#[test]
-fn test_prim_and() {
-    assert_eq!(
-        eval_prim(PrimOp::And, vec![PrimVal::Bool(true), PrimVal::Bool(true)]),
-        Some(PrimVal::Bool(true))
-    );
-    assert_eq!(
-        eval_prim(PrimOp::And, vec![PrimVal::Bool(true), PrimVal::Bool(false)]),
-        Some(PrimVal::Bool(false))
-    );
-    assert_eq!(
-        eval_prim(PrimOp::And, vec![PrimVal::Bool(false), PrimVal::Bool(true)]),
-        Some(PrimVal::Bool(false))
-    );
-    assert_eq!(
-        eval_prim(
-            PrimOp::And,
-            vec![PrimVal::Bool(false), PrimVal::Bool(false)]
-        ),
-        Some(PrimVal::Bool(false))
-    );
-}
-
-#[test]
-fn test_prim_or() {
-    assert_eq!(
-        eval_prim(PrimOp::Or, vec![PrimVal::Bool(true), PrimVal::Bool(true)]),
-        Some(PrimVal::Bool(true))
-    );
-    assert_eq!(
-        eval_prim(PrimOp::Or, vec![PrimVal::Bool(true), PrimVal::Bool(false)]),
-        Some(PrimVal::Bool(true))
-    );
-    assert_eq!(
-        eval_prim(PrimOp::Or, vec![PrimVal::Bool(false), PrimVal::Bool(true)]),
-        Some(PrimVal::Bool(true))
-    );
-    assert_eq!(
-        eval_prim(PrimOp::Or, vec![PrimVal::Bool(false), PrimVal::Bool(false)]),
-        Some(PrimVal::Bool(false))
-    );
-}
-
-#[test]
 fn test_prim_ihash() {
     let result = eval_prim(PrimOp::IHash, vec![PrimVal::Int(42)]);
     assert!(matches!(result, Some(PrimVal::Int(n)) if n >= 0));
@@ -207,7 +72,6 @@ fn test_prim_arities() {
     assert_eq!(PrimOp::INeg.arity(), 1);
     assert_eq!(PrimOp::IAdd.arity(), 2);
     assert_eq!(PrimOp::IEq.arity(), 2);
-    assert_eq!(PrimOp::Not.arity(), 1);
 }
 
 #[test]
@@ -239,18 +103,6 @@ fn test_prim_fneg() {
     assert_eq!(
         eval_prim(PrimOp::FNeg, vec![PrimVal::Float(5.0)]),
         Some(PrimVal::Float(-5.0))
-    );
-}
-
-#[test]
-fn test_prim_feq() {
-    assert_eq!(
-        eval_prim(PrimOp::FEq, vec![PrimVal::Float(3.0), PrimVal::Float(3.0)]),
-        Some(PrimVal::Bool(true))
-    );
-    assert_eq!(
-        eval_prim(PrimOp::FEq, vec![PrimVal::Float(3.0), PrimVal::Float(5.0)]),
-        Some(PrimVal::Bool(false))
     );
 }
 

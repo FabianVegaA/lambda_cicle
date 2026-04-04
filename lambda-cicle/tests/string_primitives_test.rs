@@ -1,4 +1,4 @@
-use lambda_cicle::runtime::primitives::{prim_name_to_op, PrimOp, PrimVal, INTRINSICS_TABLE};
+use lambda_cicle::runtime::primitives::{prim_name_to_op, PrimOp, PrimVal};
 
 #[test]
 fn test_prim_int_to_string() {

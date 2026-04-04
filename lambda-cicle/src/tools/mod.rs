@@ -61,7 +61,7 @@ pub fn compile_source(
     Ok((term, ty, net))
 }
 
-pub fn run_source(source: &str) -> Result<Option<crate::core::ast::Term>, ToolError> {
+pub fn run_source(source: &str) -> Result<crate::core::ast::Term, ToolError> {
     let (_, _, mut net) = compile_source(source)?;
     let evaluator = SequentialEvaluator::new();
     evaluator.evaluate(&mut net).map_err(ToolError::from)

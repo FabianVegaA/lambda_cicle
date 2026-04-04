@@ -55,8 +55,6 @@ fn test_binary_ops_have_arity_2() {
         PrimOp::FSub,
         PrimOp::FMul,
         PrimOp::FDiv,
-        PrimOp::And,
-        PrimOp::Or,
     ];
     for op in binary_ops {
         assert_eq!(op.arity(), 2, "Expected {:?} to have arity 2", op);
@@ -65,13 +63,7 @@ fn test_binary_ops_have_arity_2() {
 
 #[test]
 fn test_unary_ops_have_arity_1() {
-    let unary_ops = [
-        PrimOp::INeg,
-        PrimOp::FNeg,
-        PrimOp::Not,
-        PrimOp::Chr,
-        PrimOp::Ord,
-    ];
+    let unary_ops = [PrimOp::INeg, PrimOp::FNeg, PrimOp::Chr, PrimOp::Ord];
     for op in unary_ops {
         assert_eq!(op.arity(), 1, "Expected {:?} to have arity 1", op);
     }
@@ -261,46 +253,6 @@ fn test_fne() {
     assert_eq!(
         PrimOp::FNe.apply(&[PrimVal::Float(3.0), PrimVal::Float(4.0)]),
         Some(PrimVal::Bool(true))
-    );
-}
-
-#[test]
-fn test_not_true() {
-    assert_eq!(
-        PrimOp::Not.apply(&[PrimVal::Bool(true)]),
-        Some(PrimVal::Bool(false))
-    );
-}
-
-#[test]
-fn test_not_false() {
-    assert_eq!(
-        PrimOp::Not.apply(&[PrimVal::Bool(false)]),
-        Some(PrimVal::Bool(true))
-    );
-}
-
-#[test]
-fn test_and() {
-    assert_eq!(
-        PrimOp::And.apply(&[PrimVal::Bool(true), PrimVal::Bool(true)]),
-        Some(PrimVal::Bool(true))
-    );
-    assert_eq!(
-        PrimOp::And.apply(&[PrimVal::Bool(true), PrimVal::Bool(false)]),
-        Some(PrimVal::Bool(false))
-    );
-}
-
-#[test]
-fn test_or() {
-    assert_eq!(
-        PrimOp::Or.apply(&[PrimVal::Bool(false), PrimVal::Bool(true)]),
-        Some(PrimVal::Bool(true))
-    );
-    assert_eq!(
-        PrimOp::Or.apply(&[PrimVal::Bool(false), PrimVal::Bool(false)]),
-        Some(PrimVal::Bool(false))
     );
 }
 

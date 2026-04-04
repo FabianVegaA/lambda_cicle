@@ -1,9 +1,7 @@
 use lambda_cicle::{run_full, Term};
 
 fn eval_expr(source: &str) -> Result<Term, String> {
-    run_full(source, 0)
-        .map_err(|e| format!("{:?}", e))?
-        .ok_or_else(|| "Evaluation returned None".to_string())
+    run_full(source).map_err(|e| format!("{:?}", e))
 }
 
 fn extract_int(result: Term) -> i64 {
@@ -21,16 +19,11 @@ fn extract_float(result: Term) -> f64 {
 }
 
 fn extract_bool(result: Term) -> bool {
+    eprintln!("Extracted: {:?}", result);
     match result {
-        Term::NativeLiteral(lambda_cicle::core::ast::Literal::Bool(b)) => b,
+        Term::Constructor(name, _, _) if name == "True" => true,
+        Term::Constructor(name, _, _) if name == "False" => false,
         _ => panic!("Expected Bool literal, got {:?}", result),
-    }
-}
-
-fn extract_char(result: Term) -> char {
-    match result {
-        Term::NativeLiteral(lambda_cicle::core::ast::Literal::Char(c)) => c,
-        _ => panic!("Expected Char literal, got {:?}", result),
     }
 }
 
@@ -59,7 +52,7 @@ mod integer_arithmetic {
     fn test_idiv_e2e() {
         let result = eval_expr("val main : Result Int DivisionByZero = div 10 3").unwrap();
         match result {
-            Term::Constructor(name, args) if name == "Ok" => {
+            Term::Constructor(name, args, _) if name == "Ok" => {
                 assert_eq!(extract_int(args[0].clone()), 3);
             }
             _ => panic!("Expected Ok(3), got {:?}", result),
@@ -70,7 +63,7 @@ mod integer_arithmetic {
     fn test_idiv_by_zero() {
         let result = eval_expr("val main : Result Int DivisionByZero = div 1 0").unwrap();
         match result {
-            Term::Constructor(name, _) if name == "Err" => {}
+            Term::Constructor(name, _, _) if name == "Err" => {}
             _ => panic!("Expected Err(DivisionByZero), got {:?}", result),
         }
     }
@@ -79,7 +72,7 @@ mod integer_arithmetic {
     fn test_irem_e2e() {
         let result = eval_expr("val main : Result Int DivisionByZero = rem 10 3").unwrap();
         match result {
-            Term::Constructor(name, args) if name == "Ok" => {
+            Term::Constructor(name, args, _) if name == "Ok" => {
                 assert_eq!(extract_int(args[0].clone()), 1);
             }
             _ => panic!("Expected Ok(1), got {:?}", result),
@@ -186,7 +179,7 @@ mod float_arithmetic {
     fn test_fdiv_e2e() {
         let result = eval_expr("val main : Result Float DivisionByZero = div 10.0 2.0").unwrap();
         match result {
-            Term::Constructor(name, args) if name == "Ok" => {
+            Term::Constructor(name, args, _) if name == "Ok" => {
                 assert!((extract_float(args[0].clone()) - 5.0).abs() < 1e-10);
             }
             _ => panic!("Expected Ok(5.0), got {:?}", result),
@@ -197,7 +190,7 @@ mod float_arithmetic {
     fn test_frem_e2e() {
         let result = eval_expr("val main : Result Float DivisionByZero = rem 10.0 3.0").unwrap();
         match result {
-            Term::Constructor(name, args) if name == "Ok" => {
+            Term::Constructor(name, args, _) if name == "Ok" => {
                 assert!((extract_float(args[0].clone()) - 1.0).abs() < 1e-10);
             }
             _ => panic!("Expected Ok(1.0), got {:?}", result),
@@ -295,6 +288,7 @@ mod boolean_operations {
     #[test]
     fn test_or_both_false_e2e() {
         let result = eval_expr("val main : Bool = or False False").unwrap();
+        eprintln!("{:?}", result);
         assert!(!extract_bool(result));
     }
 
@@ -363,7 +357,7 @@ mod char_operations {
         let result =
             eval_expr("use Std.String\n val main : Ordering = compare \"c\" \"a\"").unwrap();
         match result {
-            Term::Constructor(name, _) if name == "GT" => {}
+            Term::Constructor(name, _, _) if name == "GT" => {}
             _ => panic!("Expected GT, got {:?}", result),
         }
     }
@@ -388,5 +382,5 @@ fn test_prim_call_translation() {
     let evaluator = SequentialEvaluator::new();
     let result = evaluator.evaluate(&mut net).unwrap();
 
-    assert_eq!(result, Some(Term::NativeLiteral(Literal::Int(8))));
+    assert_eq!(result, Term::NativeLiteral(Literal::Int(8)));
 }

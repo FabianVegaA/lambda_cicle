@@ -50,16 +50,6 @@ fn prim_ieq_symmetric(input: (i64, i64)) -> bool {
     result_ab == result_ba
 }
 
-fn prim_not_involution(input: bool) -> bool {
-    let result = PrimOp::Not.apply(&[PrimVal::Bool(input)]);
-    match result {
-        Some(PrimVal::Bool(b)) => {
-            PrimOp::Not.apply(&[PrimVal::Bool(b)]) == Some(PrimVal::Bool(input))
-        }
-        _ => false,
-    }
-}
-
 fn prim_ilt_antisymmetric(input: (i64, i64)) -> bool {
     let (a, b) = input;
     if a == b {
@@ -83,16 +73,6 @@ fn prim_ord_chr_inverse(input: u8) -> bool {
         }
         _ => true,
     }
-}
-
-fn prim_and_idempotent(input: bool) -> bool {
-    let result = PrimOp::And.apply(&[PrimVal::Bool(input), PrimVal::Bool(input)]);
-    result == Some(PrimVal::Bool(input))
-}
-
-fn prim_or_idempotent(input: bool) -> bool {
-    let result = PrimOp::Or.apply(&[PrimVal::Bool(input), PrimVal::Bool(input)]);
-    result == Some(PrimVal::Bool(input))
 }
 
 #[test]
@@ -121,11 +101,6 @@ fn qc_prim_ieq_symmetric() {
 }
 
 #[test]
-fn qc_prim_not_involution() {
-    quickcheck(prim_not_involution as fn(bool) -> bool);
-}
-
-#[test]
 fn qc_prim_ilt_antisymmetric() {
     quickcheck(prim_ilt_antisymmetric as fn((i64, i64)) -> bool);
 }
@@ -133,14 +108,4 @@ fn qc_prim_ilt_antisymmetric() {
 #[test]
 fn qc_prim_ord_chr_inverse() {
     quickcheck(prim_ord_chr_inverse as fn(u8) -> bool);
-}
-
-#[test]
-fn qc_prim_and_idempotent() {
-    quickcheck(prim_and_idempotent as fn(bool) -> bool);
-}
-
-#[test]
-fn qc_prim_or_idempotent() {
-    quickcheck(prim_or_idempotent as fn(bool) -> bool);
 }

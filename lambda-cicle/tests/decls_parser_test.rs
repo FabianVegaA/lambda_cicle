@@ -1,4 +1,3 @@
-use lambda_cicle::core::ast::Decl;
 use lambda_cicle::core::parser::parse_program;
 
 #[test]

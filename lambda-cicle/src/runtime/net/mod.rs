@@ -404,14 +404,20 @@ impl Net {
 
             for (vn_id, vn_port) in &value_nodes {
                 self.disconnect_port(*vn_id, *vn_port)?;
+                // Replace consumed argument nodes with Epsilon so they won't be returned by extract_result
+                // The values have been consumed by the primitive operation
+                if let Some(node) = self.get_node_mut(*vn_id) {
+                    *node = Node::epsilon();
+                }
             }
 
-            let old_ports = {
-                let prim_node = self.get_node_mut(prim_id)?;
-                prim_node.ports.clone()
-            };
-            self.port_to_wire
-                .retain(|(node_port, _), _wire_id| node_port.0 != prim_id.0);
+            // Remove only input port wires (ports 1..=arity), preserving port 0 (principal/output)
+            // Port 0 is the principal port where the result is produced and should remain connected
+            for port_idx in 1..=arity {
+                self.port_to_wire.retain(|(node_id, port_index), _| {
+                    !(*node_id == prim_id && *port_index == PortIndex(port_idx))
+                });
+            }
             let prim_node = self.get_node_mut(prim_id)?;
             *prim_node = Node::prim_val(result);
 

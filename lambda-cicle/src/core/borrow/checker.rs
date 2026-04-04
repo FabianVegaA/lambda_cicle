@@ -94,7 +94,7 @@ impl BorrowChecker {
                 }
                 Ok(())
             }
-            Term::Constructor(_, args) => {
+            Term::Constructor(_, args, _) => {
                 for arg in args {
                     self.check_term(arg)?;
                 }
@@ -165,7 +165,7 @@ impl BorrowChecker {
                 }
                 Ok(())
             }
-            Term::Constructor(_, args) => {
+            Term::Constructor(_, args, _) => {
                 for arg in args {
                     self.check_borrow_escape(arg)?;
                 }
